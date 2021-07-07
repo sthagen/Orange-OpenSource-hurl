@@ -86,6 +86,7 @@ fn execute(
     log_verbose: &impl Fn(&str),
     log_error_message: &impl Fn(bool, &str),
 ) -> HurlResult {
+
     let lines: Vec<String> = regex::Regex::new(r"\n|\r\n")
         .unwrap()
         .split(&contents)
@@ -108,6 +109,8 @@ fn execute(
             std::process::exit(EXIT_ERROR_PARSING);
         }
         Ok(hurl_file) => {
+            eprintln!("{}: RUNNING", filename);
+
             log_verbose(format!("fail fast: {}", cli_options.fail_fast).as_str());
             log_verbose(format!("insecure: {}", cli_options.insecure).as_str());
             log_verbose(format!("follow redirect: {}", cli_options.follow_location).as_str());
@@ -660,6 +663,11 @@ fn main() {
             cli_options.clone(),
             &log_verbose,
             &log_error_message,
+        );
+        eprintln!("{}: {} ({}ms)",
+                  filename,
+                  if hurl_result.success { "Success"} else { "Failure"},
+                  hurl_result.time_in_ms
         );
 
         if hurl_result.errors().is_empty() && !cli_options.interactive {
