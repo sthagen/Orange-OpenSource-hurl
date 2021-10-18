@@ -53,6 +53,29 @@ pub fn init_colored() {
     colored::control::set_virtual_terminal(true);
 }
 
+#[cfg(target_family = "unix")]
+pub fn write_bytes(buf: &[u8]) -> Result<(), CliError> {
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    handle.write_all(buf).map_err(|_| CliError {
+        message: "Error writing output".to_string(),
+    })
+}
+
+#[cfg(target_family = "windows")]
+pub fn write_bytes(buf: &[u8]) -> Result<(), CliError> {
+    if atty::is(Stream::Stdout) {
+        println!("{}", String::from_utf8_lossy(buf));
+        Ok(())
+    } else {
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+        handle.write_all(buf).map_err(|_| CliError {
+            message: "Error writing output".to_string(),
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Progress {
     pub current: usize,
@@ -80,7 +103,7 @@ fn execute(
     };
 
     if let Some(Progress { current, total }) = progress {
-        eprintln!("{}: running [{}/{}]", filename, current + 1, total);
+        eprintln!("{}: RUNNING [{}/{}]", filename, current + 1, total);
     }
     let log_parser_error =
         cli::make_logger_parser_error(lines.clone(), cli_options.color, optional_filename.clone());
@@ -196,10 +219,10 @@ fn execute(
             );
             if cli_options.progress {
                 let status = match (result.success, cli_options.color) {
-                    (true, true) => "success".green().to_string(),
-                    (true, false) => "success".to_string(),
-                    (false, true) => "failure".red().to_string(),
-                    (false, false) => "failure".to_string(),
+                    (true, true) => "SUCCESS".green().to_string(),
+                    (true, false) => "SUCCESS".to_string(),
+                    (false, true) => "FAILURE".red().to_string(),
+                    (false, false) => "FAILURE".to_string(),
                 };
                 eprintln!("{}: {}", filename, status);
             }
@@ -456,15 +479,7 @@ fn format_html(input_file: &str, dir_path: PathBuf) -> Result<(), CliError> {
 
 fn write_output(bytes: Vec<u8>, filename: Option<String>) -> Result<(), CliError> {
     match filename {
-        None => {
-            let stdout = io::stdout();
-            let mut handle = stdout.lock();
-
-            handle
-                .write_all(bytes.as_slice())
-                .expect("writing bytes to console");
-            Ok(())
-        }
+        None => write_bytes(bytes.as_slice()),
         Some(filename) => {
             let path = Path::new(filename.as_str());
             let mut file = match std::fs::File::create(&path) {
@@ -534,16 +549,16 @@ fn print_summary(duration: u128, hurl_results: Vec<HurlResult>) {
     let success = hurl_results.iter().filter(|r| r.success).count();
     let failed = total - success;
     eprintln!("--------------------------------------------------------------------------------");
-    eprintln!("executed: {}", total);
+    eprintln!("Executed:  {}", total);
     eprintln!(
-        "success: {} ({:.1}%)",
+        "Succeeded: {} ({:.1}%)",
         success,
         100.0 * success as f32 / total as f32
     );
     eprintln!(
-        "failed: {} ({:.1}%)",
+        "Failed:    {} ({:.1}%)",
         failed,
         100.0 * failed as f32 / total as f32
     );
-    eprintln!("execution time: {}ms", duration);
+    eprintln!("Duration:  {}ms", duration);
 }
