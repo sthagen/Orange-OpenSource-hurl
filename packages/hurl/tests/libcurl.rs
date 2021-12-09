@@ -45,11 +45,11 @@ fn test_hello() {
     assert_eq!(request.headers.len(), 3);
     assert!(request.headers.contains(&Header {
         name: "Host".to_string(),
-        value: "localhost:8000".to_string()
+        value: "localhost:8000".to_string(),
     }));
     assert!(request.headers.contains(&Header {
         name: "Accept".to_string(),
-        value: "*/*".to_string()
+        value: "*/*".to_string(),
     }));
 
     assert_eq!(response.version, Version::Http10);
@@ -96,11 +96,11 @@ fn test_put() {
     assert_eq!(request.url, "http://localhost:8000/put".to_string());
     assert!(request.headers.contains(&Header {
         name: "Host".to_string(),
-        value: "localhost:8000".to_string()
+        value: "localhost:8000".to_string(),
     }));
     assert!(request.headers.contains(&Header {
         name: "Accept".to_string(),
-        value: "*/*".to_string()
+        value: "*/*".to_string(),
     }));
 
     assert_eq!(response.status, 200);
@@ -147,11 +147,11 @@ fn test_patch() {
     );
     assert!(request.headers.contains(&Header {
         name: "Host".to_string(),
-        value: "www.example.com".to_string()
+        value: "www.example.com".to_string(),
     }));
     assert!(request.headers.contains(&Header {
         name: "Content-Type".to_string(),
-        value: "application/example".to_string()
+        value: "application/example".to_string(),
     }));
 
     assert_eq!(response.status, 204);
@@ -196,7 +196,7 @@ fn test_custom_headers() {
     );
     assert!(request.headers.contains(&Header {
         name: "Fruit".to_string(),
-        value: "Raspberry".to_string()
+        value: "Raspberry".to_string(),
     }));
     assert_eq!(response.status, 200);
     assert!(response.body.is_empty());
@@ -295,7 +295,7 @@ fn test_form_params() {
     assert_eq!(request.url, "http://localhost:8000/form-params".to_string());
     assert!(request.headers.contains(&Header {
         name: "Content-Type".to_string(),
-        value: "application/x-www-form-urlencoded".to_string()
+        value: "application/x-www-form-urlencoded".to_string(),
     }));
 
     assert_eq!(response.status, 200);
@@ -341,6 +341,7 @@ fn test_follow_location() {
     let request_spec = default_get_request("http://localhost:8000/redirect".to_string());
 
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: true,
         max_redirect: Some(50),
         cookie_input_file: None,
@@ -371,7 +372,7 @@ fn test_follow_location() {
     assert_eq!(response1.status, 302);
     assert!(response1.headers.contains(&Header {
         name: "Location".to_string(),
-        value: "http://localhost:8000/redirected".to_string()
+        value: "http://localhost:8000/redirected".to_string(),
     }));
 
     let (request2, response2) = calls.get(1).unwrap();
@@ -394,6 +395,7 @@ fn test_follow_location() {
 #[test]
 fn test_max_redirect() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: true,
         max_redirect: Some(10),
         cookie_input_file: None,
@@ -560,6 +562,7 @@ fn test_expect() {
 #[test]
 fn test_basic_authentication() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: Some(50),
         cookie_input_file: None,
@@ -624,6 +627,29 @@ fn test_basic_authentication() {
     assert_eq!(response.body, b"You are authenticated".to_vec());
 }
 
+#[test]
+fn test_cacert() {
+    let options = ClientOptions {
+        cacert_file: Some("tests/cert.pem".to_string()),
+        follow_location: false,
+        max_redirect: None,
+        cookie_input_file: None,
+        proxy: None,
+        no_proxy: None,
+        verbose: false,
+        insecure: false,
+        timeout: Default::default(),
+        connect_timeout: Default::default(),
+        user: None,
+        compressed: false,
+        context_dir: ".".to_string(),
+    };
+    let mut client = Client::init(options);
+    let request_spec = default_get_request("https://localhost:8001/hello".to_string());
+    let (_, response) = client.execute(&request_spec).unwrap();
+    assert_eq!(response.status, 200);
+}
+
 // region error
 
 #[test]
@@ -631,8 +657,11 @@ fn test_error_could_not_resolve_host() {
     let mut client = default_client();
     let request = default_get_request("http://unknown".to_string());
     let error = client.execute(&request).err().unwrap();
-
-    assert_eq!(error, HttpError::CouldNotResolveHost("unknown".to_string()));
+    assert!(matches!(error, HttpError::Libcurl { .. }));
+    if let HttpError::Libcurl { code, description } = error {
+        assert_eq!(code, 6);
+        assert_eq!(description, "Could not resolve host: unknown");
+    }
 }
 
 #[test]
@@ -640,9 +669,14 @@ fn test_error_fail_to_connect() {
     let mut client = default_client();
     let request_spec = default_get_request("http://localhost:9999".to_string());
     let error = client.execute(&request_spec).err().unwrap();
-    assert_eq!(error, HttpError::FailToConnect);
+    assert!(matches!(error, HttpError::Libcurl { .. }));
+    if let HttpError::Libcurl { code, description } = error {
+        assert_eq!(code, 7);
+        assert!(description.starts_with("Failed to connect to localhost port 9999"));
+    }
 
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: None,
         cookie_input_file: None,
@@ -659,12 +693,18 @@ fn test_error_fail_to_connect() {
     let mut client = Client::init(options);
     let request = default_get_request("http://localhost:8000/hello".to_string());
     let error = client.execute(&request).err().unwrap();
-    assert_eq!(error, HttpError::FailToConnect);
+    assert!(matches!(error, HttpError::Libcurl { .. }));
+    if let HttpError::Libcurl { code, description } = error {
+        assert_eq!(code, 7);
+        eprintln!("description={}", description);
+        assert!(description.starts_with("Failed to connect to localhost port 9999"));
+    }
 }
 
 #[test]
 fn test_error_could_not_resolve_proxy_name() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: None,
         cookie_input_file: None,
@@ -681,12 +721,17 @@ fn test_error_could_not_resolve_proxy_name() {
     let mut client = Client::init(options);
     let request_spec = default_get_request("http://localhost:8000/hello".to_string());
     let error = client.execute(&request_spec).err().unwrap();
-    assert_eq!(error, HttpError::CouldNotResolveProxyName);
+    assert!(matches!(error, HttpError::Libcurl { .. }));
+    if let HttpError::Libcurl { code, description } = error {
+        assert_eq!(code, 5);
+        assert_eq!(description, "Could not resolve proxy: unknown");
+    }
 }
 
 #[test]
 fn test_error_ssl() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: None,
         cookie_input_file: None,
@@ -703,17 +748,21 @@ fn test_error_ssl() {
     let mut client = Client::init(options);
     let request_spec = default_get_request("https://localhost:8001/hello".to_string());
     let error = client.execute(&request_spec).err().unwrap();
-    let message = if cfg!(windows) {
-        "schannel: SEC_E_UNTRUSTED_ROOT (0x80090325) - The certificate chain was issued by an authority that is not trusted.".to_string()
-    } else {
-        "SSL certificate problem: self signed certificate".to_string()
-    };
-    assert_eq!(error, HttpError::SslCertificate(Some(message)));
+    if let HttpError::Libcurl { code, description } = error {
+        assert_eq!(code, 60);
+        let message = if cfg!(windows) {
+            "schannel: SEC_E_UNTRUSTED_ROOT (0x80090325) - The certificate chain was issued by an authority that is not trusted.".to_string()
+        } else {
+            "SSL certificate problem: self signed certificate".to_string()
+        };
+        assert_eq!(description, message);
+    }
 }
 
 #[test]
 fn test_timeout() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: None,
         cookie_input_file: None,
@@ -730,12 +779,17 @@ fn test_timeout() {
     let mut client = Client::init(options);
     let request_spec = default_get_request("http://localhost:8000/timeout".to_string());
     let error = client.execute(&request_spec).err().unwrap();
-    assert_eq!(error, HttpError::Timeout);
+    assert!(matches!(error, HttpError::Libcurl { .. }));
+    if let HttpError::Libcurl { code, description } = error {
+        assert_eq!(code, 28);
+        assert!(description.starts_with("Operation timed out after "));
+    }
 }
 
 #[test]
 fn test_accept_encoding() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: None,
         cookie_input_file: None,
@@ -765,7 +819,7 @@ fn test_accept_encoding() {
     let (request, response) = client.execute(&request_spec).unwrap();
     assert!(request.headers.contains(&Header {
         name: "Accept-Encoding".to_string(),
-        value: "gzip, deflate, br".to_string()
+        value: "gzip, deflate, br".to_string(),
     }));
     assert_eq!(response.status, 200);
     assert!(response.headers.contains(&Header {
@@ -777,6 +831,7 @@ fn test_accept_encoding() {
 #[test]
 fn test_connect_timeout() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: Some(50),
         cookie_input_file: None,
@@ -797,10 +852,19 @@ fn test_connect_timeout() {
         "curl 'http://10.0.0.0' --connect-timeout 1".to_string()
     );
     let error = client.execute(&request_spec).err().unwrap();
-    if cfg!(target_os = "macos") {
-        assert_eq!(error, HttpError::FailToConnect);
-    } else {
-        assert_eq!(error, HttpError::Timeout);
+    assert!(matches!(error, HttpError::Libcurl { .. }));
+    if let HttpError::Libcurl { code, description } = error {
+        eprintln!("description={}", description);
+        if cfg!(target_os = "macos") {
+            assert_eq!(code, 7);
+            assert_eq!(description, "Couldn't connect to server");
+        } else {
+            assert_eq!(code, 28);
+            assert!(
+                description.starts_with("Connection timed out")
+                    || description.starts_with("Connection timeout")
+            );
+        }
     }
 }
 // endregion
@@ -835,7 +899,7 @@ fn test_cookie() {
     let (request, response) = client.execute(&request_spec).unwrap();
     assert!(request.headers.contains(&Header {
         name: "Cookie".to_string(),
-        value: "cookie1=valueA".to_string()
+        value: "cookie1=valueA".to_string(),
     }));
     assert_eq!(response.status, 200);
     assert!(response.body.is_empty());
@@ -886,7 +950,7 @@ fn test_multiple_request_cookies() {
     let (request, response) = client.execute(&request_spec).unwrap();
     assert!(request.headers.contains(&Header {
         name: "Cookie".to_string(),
-        value: "user1=Bob; user2=Bill".to_string()
+        value: "user1=Bob; user2=Bill".to_string(),
     }));
     assert_eq!(response.status, 200);
     assert!(response.body.is_empty());
@@ -926,7 +990,7 @@ fn test_cookie_storage() {
     let (request, response) = client.execute(&request_spec).unwrap();
     assert!(request.headers.contains(&Header {
         name: "Cookie".to_string(),
-        value: "cookie2=valueA".to_string()
+        value: "cookie2=valueA".to_string(),
     }));
     assert_eq!(response.status, 200);
     assert!(response.body.is_empty());
@@ -935,6 +999,7 @@ fn test_cookie_storage() {
 #[test]
 fn test_cookie_file() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: Some(50),
         cookie_input_file: Some("tests/cookies.txt".to_string()),
@@ -964,7 +1029,7 @@ fn test_cookie_file() {
     );
     assert!(request.headers.contains(&Header {
         name: "Cookie".to_string(),
-        value: "cookie2=valueA".to_string()
+        value: "cookie2=valueA".to_string(),
     }));
 
     assert_eq!(response.status, 200);
@@ -979,6 +1044,7 @@ fn test_cookie_file() {
 fn test_proxy() {
     // mitmproxy listening on port 8888
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: Some(50),
         cookie_input_file: None,
@@ -1008,6 +1074,7 @@ fn test_proxy() {
 #[test]
 fn test_insecure() {
     let options = ClientOptions {
+        cacert_file: None,
         follow_location: false,
         max_redirect: Some(50),
         cookie_input_file: None,
@@ -1032,4 +1099,20 @@ fn test_insecure() {
     let (request, response) = client.execute(&request_spec).unwrap();
     assert_eq!(request.url, "https://localhost:8001/hello");
     assert_eq!(response.status, 200);
+}
+
+#[test]
+fn test_version() {
+    // This test if only informative for the time-being
+
+    let output = std::process::Command::new("curl")
+        .args(["--version"])
+        .output()
+        .expect("failed to execute process");
+    let curl_version = std::str::from_utf8(&output.stdout).unwrap();
+    let index = curl_version.find("libcurl").expect("libcurl substring");
+    let expected_version = &curl_version[index..];
+    eprintln!("{:?}", expected_version);
+    let versions = libcurl_version_info();
+    eprintln!("{:?}", versions);
 }

@@ -33,16 +33,10 @@ use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HttpError {
-    CouldNotResolveProxyName,
-    CouldNotResolveHost(String),
-    FailToConnect,
-    TooManyRedirect,
-    CouldNotParseResponse,
-    SslCertificate(Option<String>),
-    InvalidUrl,
-    Timeout,
     StatuslineIsMissing,
-    Other { description: String, code: i32 },
+    CouldNotParseResponse,
+    TooManyRedirect,
+    Libcurl { code: i32, description: String },
 }
 
 #[derive(Debug)]
@@ -129,9 +123,18 @@ impl Client {
     pub fn execute(&mut self, request: &RequestSpec) -> Result<(Request, Response), HttpError> {
         // set handle attributes
         // that have not been set or reset
+
+        // We force libcurl verbose mode regardless of Hurl verbose option to be able
+        // to capture HTTP request headers in libcurl `debug_function`. That's the only
+        // way to get access to the outgoing headers.
         self.handle.verbose(true).unwrap();
         self.handle.ssl_verify_host(!self.options.insecure).unwrap();
         self.handle.ssl_verify_peer(!self.options.insecure).unwrap();
+        if let Some(cacert_file) = self.options.cacert_file.clone() {
+            self.handle.cainfo(cacert_file).unwrap();
+            self.handle.ssl_cert_type("PEM").unwrap();
+        }
+
         if let Some(proxy) = self.options.proxy.clone() {
             self.handle.proxy(proxy.as_str()).unwrap();
         }
@@ -221,22 +224,12 @@ impl Client {
                 .unwrap();
 
             if let Err(e) = transfer.perform() {
-                return match e.code() {
-                    3 => Err(HttpError::InvalidUrl),
-                    5 => Err(HttpError::CouldNotResolveProxyName),
-                    6 => Err(HttpError::CouldNotResolveHost(extract_host(
-                        request.url.clone(),
-                    ))),
-                    7 => Err(HttpError::FailToConnect),
-                    28 => Err(HttpError::Timeout),
-                    60 => Err(HttpError::SslCertificate(
-                        e.extra_description().map(String::from),
-                    )),
-                    _ => Err(HttpError::Other {
-                        code: e.code() as i32, // due to windows build
-                        description: e.description().to_string(),
-                    }),
+                let code = e.code() as i32; // due to windows build
+                let description = match e.extra_description() {
+                    None => e.description().to_string(),
+                    Some(s) => s.to_string(),
                 };
+                return Err(HttpError::Libcurl { code, description });
             }
         }
 
@@ -565,7 +558,10 @@ pub fn all_cookies(cookie_storage: Vec<Cookie>, request: &RequestSpec) -> Vec<Re
 ///
 pub fn match_cookie(cookie: &Cookie, url: &str) -> bool {
     // is it possible to do it with libcurl?
-    let url = Url::parse(url).expect("valid url");
+    let url = match Url::parse(url) {
+        Ok(url) => url,
+        Err(_) => return false,
+    };
     if let Some(domain) = url.domain() {
         if cookie.include_subdomain == "FALSE" {
             if cookie.domain != domain {
@@ -595,15 +591,6 @@ impl Header {
             None => None,
         }
     }
-}
-
-///
-/// Extract Hostname for url
-/// assume that that the url is a valud url
-///
-fn extract_host(url: String) -> String {
-    let url = Url::parse(url.as_str()).expect("valid url");
-    url.host().expect("valid host").to_string()
 }
 
 ///

@@ -21,25 +21,16 @@ use crate::cli::CliError;
 use crate::http::ClientOptions;
 use crate::runner::Value;
 use atty::Stream;
-use clap::{AppSettings, ArgMatches};
+use clap::{App, AppSettings, ArgMatches};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-#[cfg(target_family = "unix")]
-pub fn dev_null() -> String {
-    "/dev/null".to_string()
-}
-
-#[cfg(target_family = "windows")]
-pub fn dev_null() -> String {
-    "nul".to_string()
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CliOptions {
+    pub cacert_file: Option<String>,
     pub color: bool,
     pub compressed: bool,
     pub connect_timeout: Duration,
@@ -48,15 +39,17 @@ pub struct CliOptions {
     pub fail_fast: bool,
     pub file_root: Option<String>,
     pub follow_location: bool,
+    pub glob_files: Vec<String>,
     pub html_dir: Option<PathBuf>,
     pub ignore_asserts: bool,
     pub include: bool,
     pub insecure: bool,
     pub interactive: bool,
-    pub json_file: Option<PathBuf>,
+    pub junit_file: Option<PathBuf>,
     pub max_redirect: Option<usize>,
     pub no_proxy: Option<String>,
     pub output: Option<String>,
+    pub output_type: OutputType,
     pub progress: bool,
     pub proxy: Option<String>,
     pub summary: bool,
@@ -67,9 +60,14 @@ pub struct CliOptions {
     pub verbose: bool,
 }
 
-pub fn app() -> clap::App<'static, 'static> {
-    clap::App::new("hurl")
-        .version(clap::crate_version!())
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OutputType {
+    ResponseBody,
+    Json,
+    NoOutput,
+}
+pub fn app() -> App<'static, 'static> {
+    App::new("hurl")
         .about("Run hurl FILE(s) or standard input")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::UnifiedHelpMessage)
@@ -80,9 +78,15 @@ pub fn app() -> clap::App<'static, 'static> {
                 .multiple(true),
         )
         .arg(
+            clap::Arg::with_name("cacert_file")
+                .long("cacert")
+                .value_name("FILE")
+                .help("CA certificate to verify peer against (PEM format)"),
+        )
+        .arg(
             clap::Arg::with_name("color")
                 .long("color")
-                .conflicts_with("no-color")
+                .conflicts_with("no_color")
                 .help("Colorize Output"),
         )
         .arg(
@@ -130,6 +134,14 @@ pub fn app() -> clap::App<'static, 'static> {
                 .help("Follow redirects"),
         )
         .arg(
+            clap::Arg::with_name("glob")
+                .long("glob")
+                .value_name("GLOB")
+                .multiple(true)
+                .number_of_values(1)
+                .help("Specify input files that match the given blob. Multiple glob flags may be used."),
+        )
+        .arg(
             clap::Arg::with_name("html")
                 .long("html")
                 .value_name("DIR")
@@ -162,8 +174,14 @@ pub fn app() -> clap::App<'static, 'static> {
         .arg(
             clap::Arg::with_name("json")
                 .long("json")
+                .conflicts_with("no_output")
+                .help("Output each hurl file result to JSON"),
+        )
+        .arg(
+            clap::Arg::with_name("junit")
+                .long("report-junit")
                 .value_name("FILE")
-                .help("Write full session(s) to json file")
+                .help("Write a Junit XML report to the given file")
                 .takes_value(true),
         )
         .arg(
@@ -188,6 +206,12 @@ pub fn app() -> clap::App<'static, 'static> {
                 .help("Do not colorize Output"),
         )
         .arg(
+            clap::Arg::with_name("no_output")
+                .long("no-output")
+                .conflicts_with("json")
+                .help("Suppress output. By default, Hurl outputs the body of the last response."),
+        )
+        .arg(
             clap::Arg::with_name("noproxy")
                 .long("noproxy")
                 .value_name("HOST(S)")
@@ -204,7 +228,7 @@ pub fn app() -> clap::App<'static, 'static> {
         .arg(
             clap::Arg::with_name("progress")
                 .long("progress")
-                .help("Print filename and status for each test"),
+                .help("Print filename and status for each test (stderr)"),
         )
         .arg(
             clap::Arg::with_name("proxy")
@@ -214,14 +238,21 @@ pub fn app() -> clap::App<'static, 'static> {
                 .help("Use proxy on given protocol/host/port"),
         )
         .arg(
+            clap::Arg::with_name("report_html")
+                .long("report-html")
+                .value_name("DIR")
+                .help("Generate html report to dir")
+                .takes_value(true),
+        )
+        .arg(
             clap::Arg::with_name("summary")
                 .long("summary")
-                .help("Print test metrics at the end of the run"),
+                .help("Print test metrics at the end of the run (stderr)"),
         )
         .arg(
             clap::Arg::with_name("test")
                 .long("test")
-                .help("Activate test mode; equals --output /dev/null --progress --summary"),
+                .help("Activate test mode; equals --no-output --progress --summary"),
         )
         .arg(
             clap::Arg::with_name("to_entry")
@@ -264,6 +295,17 @@ pub fn app() -> clap::App<'static, 'static> {
 }
 
 pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
+    let cacert_file = match matches.value_of("cacert_file") {
+        None => None,
+        Some(filename) => {
+            if !Path::new(filename).is_file() {
+                let message = format!("File {} does not exist", filename);
+                return Err(CliError { message });
+            } else {
+                Some(filename.to_string())
+            }
+        }
+    };
     let color = output_color(matches.clone());
     let compressed = matches.is_present("compressed");
     let connect_timeout = match matches.value_of("connect_timeout") {
@@ -286,7 +328,19 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
     let fail_fast = !matches.is_present("fail_at_end");
     let file_root = matches.value_of("file_root").map(|value| value.to_string());
     let follow_location = matches.is_present("follow_location");
-    let html_dir = if let Some(dir) = matches.value_of("html") {
+    let glob_files = match_glob_files(matches.clone())?;
+    // deprecated
+    // Support --report-html and --html only for the current version
+    if matches.is_present("html") {
+        eprintln!("The option --html is deprecated. It has been renamed to --report-html.");
+        eprintln!("It will be removed in the next version");
+    }
+    let report_html = if let Some(dir) = matches.value_of("html") {
+        Some(dir)
+    } else {
+        matches.value_of("report_html")
+    };
+    let html_dir = if let Some(dir) = report_html {
         let path = Path::new(dir);
         if !path.exists() {
             match std::fs::create_dir(path) {
@@ -311,7 +365,7 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
     let include = matches.is_present("include");
     let insecure = matches.is_present("insecure");
     let interactive = matches.is_present("interactive");
-    let json_file = if let Some(filename) = matches.value_of("json") {
+    let junit_file = if let Some(filename) = matches.value_of("junit") {
         let path = Path::new(filename);
         Some(path.to_path_buf())
     } else {
@@ -330,12 +384,15 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
         },
     };
     let no_proxy = matches.value_of("proxy").map(|x| x.to_string());
-    let output = if let Some(filename) = matches.value_of("output") {
-        Some(filename.to_string())
-    } else if matches.is_present("test") {
-        Some(dev_null())
+    let output = matches
+        .value_of("output")
+        .map(|filename| filename.to_string());
+    let output_type = if matches.is_present("json") {
+        OutputType::Json
+    } else if matches.is_present("no_output") || matches.is_present("test") {
+        OutputType::NoOutput
     } else {
-        None
+        OutputType::ResponseBody
     };
     let progress = matches.is_present("progress") || matches.is_present("test");
     let proxy = matches.value_of("proxy").map(|x| x.to_string());
@@ -357,6 +414,7 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
     let verbose = matches.is_present("verbose") || matches.is_present("interactive");
 
     Ok(CliOptions {
+        cacert_file,
         color,
         compressed,
         connect_timeout,
@@ -365,15 +423,17 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
         fail_fast,
         file_root,
         follow_location,
+        glob_files,
         html_dir,
         ignore_asserts,
         include,
         insecure,
         interactive,
-        json_file,
+        junit_file,
         max_redirect,
         no_proxy,
         output,
+        output_type,
         progress,
         proxy,
         summary,
@@ -410,6 +470,14 @@ fn to_entry(matches: ArgMatches) -> Result<Option<usize>, CliError> {
 
 fn variables(matches: ArgMatches) -> Result<HashMap<String, Value>, CliError> {
     let mut variables = HashMap::new();
+
+    // use environment variables prefix by HURL_
+    for (env_name, env_value) in std::env::vars() {
+        if let Some(name) = env_name.strip_prefix("HURL_") {
+            let value = cli::parse_variable_value(env_value.as_str())?;
+            variables.insert(name.to_string(), value);
+        }
+    }
 
     if let Some(filename) = matches.value_of("variables_file") {
         let path = std::path::Path::new(filename);
@@ -448,4 +516,40 @@ fn variables(matches: ArgMatches) -> Result<HashMap<String, Value>, CliError> {
     }
 
     Ok(variables)
+}
+
+pub fn match_glob_files(matches: ArgMatches) -> Result<Vec<String>, CliError> {
+    let mut filenames = vec![];
+    if matches.is_present("glob") {
+        let exprs: Vec<&str> = matches.values_of("glob").unwrap().collect();
+        for expr in exprs {
+            eprintln!("expr={}", expr);
+            let paths = match glob::glob(expr) {
+                Ok(paths) => paths,
+                Err(_) => {
+                    return Err(CliError {
+                        message: "Failed to read glob pattern".to_string(),
+                    })
+                }
+            };
+            for entry in paths {
+                match entry {
+                    Ok(path) => match path.into_os_string().into_string() {
+                        Ok(filename) => filenames.push(filename),
+                        Err(_) => {
+                            return Err(CliError {
+                                message: "Failed to read glob pattern".to_string(),
+                            })
+                        }
+                    },
+                    Err(_) => {
+                        return Err(CliError {
+                            message: "Failed to read glob pattern".to_string(),
+                        })
+                    }
+                }
+            }
+        }
+    }
+    Ok(filenames)
 }

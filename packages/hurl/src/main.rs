@@ -25,9 +25,8 @@ use atty::Stream;
 use colored::*;
 
 use hurl::cli;
-use hurl::cli::{CliError, CliOptions};
+use hurl::cli::{CliError, CliOptions, OutputType};
 use hurl::http;
-use hurl::json;
 use hurl::report;
 use hurl::runner;
 use hurl::runner::{HurlResult, RunnerOptions};
@@ -148,6 +147,7 @@ fn execute(
                 }
             }
 
+            let cacert_file = cli_options.cacert_file;
             let follow_location = cli_options.follow_location;
             let verbose = cli_options.verbose;
             let insecure = cli_options.insecure;
@@ -173,6 +173,7 @@ fn execute(
                 Some(filename) => filename,
             };
             let options = http::ClientOptions {
+                cacert_file,
                 follow_location,
                 max_redirect,
                 cookie_input_file,
@@ -245,13 +246,30 @@ pub fn unwrap_or_exit<T>(
 }
 
 fn main() {
-    let app = cli::app();
+    let version_info = format!(
+        "{} {}",
+        clap::crate_version!(),
+        http::libcurl_version_info().join(" ")
+    );
+    let app = cli::app().version(version_info.as_str());
     let matches = app.clone().get_matches();
     init_colored();
-    let mut filenames = match matches.values_of("INPUT") {
-        None => vec![],
-        Some(v) => v.collect(),
+
+    let verbose = matches.is_present("verbose") || matches.is_present("interactive");
+    let log_verbose = cli::make_logger_verbose(verbose);
+    let color = cli::output_color(matches.clone());
+    let log_error_message = cli::make_logger_error_message(color);
+    let cli_options = unwrap_or_exit(&log_error_message, cli::parse_options(matches.clone()));
+
+    let mut filenames = vec![];
+    if let Some(values) = matches.values_of("INPUT") {
+        for value in values {
+            filenames.push(value.to_string());
+        }
     };
+    for filename in &cli_options.glob_files {
+        filenames.push(filename.to_string());
+    }
 
     if filenames.is_empty() && atty::is(Stream::Stdin) {
         if app.clone().print_help().is_err() {
@@ -260,17 +278,11 @@ fn main() {
         println!();
         std::process::exit(EXIT_ERROR_COMMANDLINE);
     } else if filenames.is_empty() {
-        filenames.push("-");
+        filenames.push("-".to_string());
     }
 
     let current_dir_buf = std::env::current_dir().unwrap();
     let current_dir = current_dir_buf.as_path();
-
-    let verbose = matches.is_present("verbose") || matches.is_present("interactive");
-    let log_verbose = cli::make_logger_verbose(verbose);
-    let color = cli::output_color(matches.clone());
-    let log_error_message = cli::make_logger_error_message(color);
-    let cli_options = unwrap_or_exit(&log_error_message, cli::parse_options(matches.clone()));
 
     let mut hurl_results = vec![];
 
@@ -286,11 +298,19 @@ fn main() {
     };
 
     let start = Instant::now();
-    let mut json_results = vec![];
 
-    if let Some(file_path) = cli_options.json_file.clone() {
-        json_results = unwrap_or_exit(&log_error_message, json::parse_json(file_path));
-    }
+    let doc = if let Ok(doc) = report::create_or_get_junit_report(cli_options.junit_file.clone()) {
+        doc
+    } else {
+        log_error_message(false, "Error creating Junit XML report");
+        std::process::exit(EXIT_ERROR_UNDEFINED);
+    };
+    let mut testsuite = if let Ok(doc) = report::add_testsuite(&doc) {
+        doc
+    } else {
+        log_error_message(false, "Error creating Junit XML report");
+        std::process::exit(EXIT_ERROR_UNDEFINED);
+    };
 
     for (current, filename) in filenames.iter().enumerate() {
         let contents = match cli::read_to_string(filename) {
@@ -318,8 +338,12 @@ fn main() {
             &log_error_message,
             progress,
         );
+        hurl_results.push(hurl_result.clone());
 
-        if hurl_result.errors().is_empty() && !cli_options.interactive {
+        if matches!(cli_options.output_type, OutputType::ResponseBody)
+            && hurl_result.errors().is_empty()
+            && !cli_options.interactive
+        {
             // default
             // last entry + response + body
             if let Some(entry_result) = hurl_result.entries.last() {
@@ -370,7 +394,7 @@ fn main() {
                     cli::log_info("no response has been received");
                 }
             } else {
-                let source = if *filename == "-" {
+                let source = if filename.as_str() == "-" {
                     "".to_string()
                 } else {
                     format!("for file {}", filename).to_string()
@@ -382,26 +406,33 @@ fn main() {
             };
         }
 
-        hurl_results.push(hurl_result.clone());
-
-        if cli_options.json_file.is_some() {
-            let lines: Vec<String> = regex::Regex::new(r"\n|\r\n")
-                .unwrap()
-                .split(&contents)
-                .map(|l| l.to_string())
-                .collect();
+        let lines: Vec<String> = regex::Regex::new(r"\n|\r\n")
+            .unwrap()
+            .split(&contents)
+            .map(|l| l.to_string())
+            .collect();
+        if matches!(cli_options.output_type, OutputType::Json) {
             let json_result = hurl_result.to_json(&lines);
-            json_results.push(json_result);
+            let serialized = serde_json::to_string(&json_result).unwrap();
+            let s = format!("{}\n", serialized);
+            unwrap_or_exit(
+                &log_error_message,
+                write_output(s.into_bytes(), cli_options.output.clone()),
+            );
+        }
+        if cli_options.junit_file.is_some() {
+            unwrap_or_exit(
+                &log_error_message,
+                report::add_testcase(&doc, &mut testsuite, hurl_result, &lines),
+            );
         }
     }
-    let duration = start.elapsed().as_millis();
 
-    if let Some(file_path) = cli_options.json_file.clone() {
-        log_verbose(format!("Writing json report to {}", file_path.display()).as_str());
-        unwrap_or_exit(
-            &log_error_message,
-            json::write_json_report(file_path, json_results),
-        );
+    if let Some(file_path) = cli_options.junit_file.clone() {
+        log_verbose(format!("Writing Junit report to {}", file_path.display()).as_str());
+        if doc.save_file(&file_path.to_string_lossy()).is_err() {
+            log_error_message(false, format!("Failed to save to {:?}", file_path).as_str());
+        }
     }
 
     if let Some(dir_path) = cli_options.html_dir {
@@ -412,7 +443,10 @@ fn main() {
         );
 
         for filename in filenames {
-            unwrap_or_exit(&log_error_message, format_html(filename, dir_path.clone()));
+            unwrap_or_exit(
+                &log_error_message,
+                format_html(filename.as_str(), dir_path.clone()),
+            );
         }
     }
 
@@ -425,7 +459,9 @@ fn main() {
     }
 
     if cli_options.summary {
-        print_summary(duration, hurl_results.clone())
+        let duration = start.elapsed().as_millis();
+        let summary = get_summary(duration, hurl_results.clone());
+        eprintln!("{}", summary.as_str());
     }
 
     std::process::exit(exit_code(hurl_results));
@@ -544,21 +580,30 @@ fn write_cookies_file(file_path: PathBuf, hurl_results: Vec<HurlResult>) -> Resu
     Ok(())
 }
 
-fn print_summary(duration: u128, hurl_results: Vec<HurlResult>) {
+fn get_summary(duration: u128, hurl_results: Vec<HurlResult>) -> String {
     let total = hurl_results.len();
     let success = hurl_results.iter().filter(|r| r.success).count();
     let failed = total - success;
-    eprintln!("--------------------------------------------------------------------------------");
-    eprintln!("Executed:  {}", total);
-    eprintln!(
-        "Succeeded: {} ({:.1}%)",
-        success,
-        100.0 * success as f32 / total as f32
+    let mut s =
+        "--------------------------------------------------------------------------------\n"
+            .to_string();
+    s.push_str(format!("Executed:  {}\n", total).as_str());
+    s.push_str(
+        format!(
+            "Succeeded: {} ({:.1}%)\n",
+            success,
+            100.0 * success as f32 / total as f32
+        )
+        .as_str(),
     );
-    eprintln!(
-        "Failed:    {} ({:.1}%)",
-        failed,
-        100.0 * failed as f32 / total as f32
+    s.push_str(
+        format!(
+            "Failed:    {} ({:.1}%)\n",
+            failed,
+            100.0 * failed as f32 / total as f32
+        )
+        .as_str(),
     );
-    eprintln!("Duration:  {}ms", duration);
+    s.push_str(format!("Duration:  {}ms\n", duration).as_str());
+    s
 }

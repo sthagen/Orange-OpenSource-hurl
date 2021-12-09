@@ -1,6 +1,5 @@
 /*
  * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +22,11 @@ use super::cli::CliError;
 use super::runner::HurlResult;
 
 mod html;
+mod junit;
+
+pub use junit::add_testcase;
+pub use junit::add_testsuite;
+pub use junit::create_or_get_junit_report;
 
 pub fn parse_html(path: PathBuf) -> Result<Vec<HurlResult>, CliError> {
     if path.exists() {
@@ -259,6 +263,7 @@ fn create_html_result(result: HurlResult) -> html::Element {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -290,7 +295,6 @@ mod tests {
            </body>
         </html>"#;
 
-        //
         assert_eq!(
             parse_html_report(html),
             vec![
