@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ pub struct CliOptions {
     pub include: bool,
     pub insecure: bool,
     pub interactive: bool,
-    pub junit_file: Option<PathBuf>,
+    pub junit_file: Option<String>,
     pub max_redirect: Option<usize>,
     pub no_proxy: Option<String>,
     pub output: Option<String>,
@@ -56,6 +56,7 @@ pub struct CliOptions {
     pub timeout: Duration,
     pub to_entry: Option<usize>,
     pub user: Option<String>,
+    pub user_agent: Option<String>,
     pub variables: HashMap<String, Value>,
     pub verbose: bool,
 }
@@ -66,196 +67,191 @@ pub enum OutputType {
     Json,
     NoOutput,
 }
-pub fn app() -> App<'static, 'static> {
-    App::new("hurl")
+
+pub fn app(version: &str) -> App {
+    clap::App::new("hurl")
         .about("Run hurl FILE(s) or standard input")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::UnifiedHelpMessage)
+        .setting(AppSettings::DisableColoredHelp)
+        .version(version)
         .arg(
-            clap::Arg::with_name("INPUT")
+            clap::Arg::new("INPUT")
                 .help("Sets the input file to use")
                 .required(false)
-                .multiple(true),
+                .multiple_occurrences(true),
         )
         .arg(
-            clap::Arg::with_name("cacert_file")
+            clap::Arg::new("cacert_file")
                 .long("cacert")
                 .value_name("FILE")
                 .help("CA certificate to verify peer against (PEM format)"),
         )
         .arg(
-            clap::Arg::with_name("color")
+            clap::Arg::new("color")
                 .long("color")
                 .conflicts_with("no_color")
                 .help("Colorize Output"),
         )
         .arg(
-            clap::Arg::with_name("compressed")
+            clap::Arg::new("compressed")
                 .long("compressed")
                 .help("Request compressed response (using deflate or gzip)"),
         )
         .arg(
-            clap::Arg::with_name("connect_timeout")
+            clap::Arg::new("connect_timeout")
                 .long("connect-timeout")
                 .value_name("SECONDS")
                 .help("Maximum time allowed for connection"),
         )
         .arg(
-            clap::Arg::with_name("cookies_input_file")
-                .short("b")
+            clap::Arg::new("cookies_input_file")
+                .short('b')
                 .long("cookie")
                 .value_name("FILE")
                 .help("Read cookies from FILE"),
         )
         .arg(
-            clap::Arg::with_name("cookies_output_file")
-                .short("c")
+            clap::Arg::new("cookies_output_file")
+                .short('c')
                 .long("cookie-jar")
                 .value_name("FILE")
                 .help("Write cookies to FILE after running the session (only for one session)"),
         )
         .arg(
-            clap::Arg::with_name("fail_at_end")
+            clap::Arg::new("fail_at_end")
                 .long("fail-at-end")
                 .help("Fail at end")
                 .takes_value(false),
         )
         .arg(
-            clap::Arg::with_name("file_root")
+            clap::Arg::new("file_root")
                 .long("file-root")
                 .value_name("DIR")
                 .help("set root filesystem to import file in hurl (default is current directory)")
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("follow_location")
-                .short("L")
+            clap::Arg::new("follow_location")
+                .short('L')
                 .long("location")
                 .help("Follow redirects"),
         )
         .arg(
-            clap::Arg::with_name("glob")
+            clap::Arg::new("glob")
                 .long("glob")
                 .value_name("GLOB")
-                .multiple(true)
+                .multiple_occurrences(true)
                 .number_of_values(1)
                 .help("Specify input files that match the given blob. Multiple glob flags may be used."),
         )
         .arg(
-            clap::Arg::with_name("html")
-                .long("html")
-                .value_name("DIR")
-                .help("Generate html report to dir")
-                .takes_value(true),
-        )
-        .arg(
-            clap::Arg::with_name("include")
-                .short("i")
+            clap::Arg::new("include")
+                .short('i')
                 .long("include")
                 .help("Include the HTTP headers in the output"),
         )
         .arg(
-            clap::Arg::with_name("ignore_asserts")
+            clap::Arg::new("ignore_asserts")
                 .long("ignore-asserts")
                 .help("Ignore asserts defined in the Hurl file."),
         )
         .arg(
-            clap::Arg::with_name("insecure")
-                .short("k")
+            clap::Arg::new("insecure")
+                .short('k')
                 .long("insecure")
                 .help("Allow insecure SSL connections"),
         )
         .arg(
-            clap::Arg::with_name("interactive")
+            clap::Arg::new("interactive")
                 .long("interactive")
                 .conflicts_with("to_entry")
                 .help("Turn on interactive mode"),
         )
         .arg(
-            clap::Arg::with_name("json")
+            clap::Arg::new("json")
                 .long("json")
                 .conflicts_with("no_output")
                 .help("Output each hurl file result to JSON"),
         )
         .arg(
-            clap::Arg::with_name("junit")
+            clap::Arg::new("junit")
                 .long("report-junit")
                 .value_name("FILE")
                 .help("Write a Junit XML report to the given file")
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("max_time")
+            clap::Arg::new("max_time")
                 .long("max-time")
-                .short("m")
+                .short('m')
                 .value_name("NUM")
                 .allow_hyphen_values(true)
                 .help("Maximum time allowed for the transfer"),
         )
         .arg(
-            clap::Arg::with_name("max_redirects")
+            clap::Arg::new("max_redirects")
                 .long("max-redirs")
                 .value_name("NUM")
                 .allow_hyphen_values(true)
                 .help("Maximum number of redirects allowed"),
         )
         .arg(
-            clap::Arg::with_name("no_color")
+            clap::Arg::new("no_color")
                 .long("no-color")
                 .conflicts_with("color")
                 .help("Do not colorize Output"),
         )
         .arg(
-            clap::Arg::with_name("no_output")
+            clap::Arg::new("no_output")
                 .long("no-output")
                 .conflicts_with("json")
                 .help("Suppress output. By default, Hurl outputs the body of the last response."),
         )
         .arg(
-            clap::Arg::with_name("noproxy")
+            clap::Arg::new("noproxy")
                 .long("noproxy")
                 .value_name("HOST(S)")
                 .help("List of hosts which do not use proxy")
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("output")
-                .short("o")
+            clap::Arg::new("output")
+                .short('o')
                 .long("output")
                 .value_name("FILE")
                 .help("Write to FILE instead of stdout"),
         )
         .arg(
-            clap::Arg::with_name("progress")
+            clap::Arg::new("progress")
                 .long("progress")
                 .help("Print filename and status for each test (stderr)"),
         )
         .arg(
-            clap::Arg::with_name("proxy")
-                .short("x")
+            clap::Arg::new("proxy")
+                .short('x')
                 .long("proxy")
                 .value_name("[PROTOCOL://]HOST[:PORT]")
                 .help("Use proxy on given protocol/host/port"),
         )
         .arg(
-            clap::Arg::with_name("report_html")
+            clap::Arg::new("report_html")
                 .long("report-html")
                 .value_name("DIR")
                 .help("Generate html report to dir")
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("summary")
+            clap::Arg::new("summary")
                 .long("summary")
                 .help("Print test metrics at the end of the run (stderr)"),
         )
         .arg(
-            clap::Arg::with_name("test")
+            clap::Arg::new("test")
                 .long("test")
                 .help("Activate test mode; equals --no-output --progress --summary"),
         )
         .arg(
-            clap::Arg::with_name("to_entry")
+            clap::Arg::new("to_entry")
                 .long("to-entry")
                 .value_name("ENTRY_NUMBER")
                 .conflicts_with("interactive")
@@ -263,32 +259,40 @@ pub fn app() -> App<'static, 'static> {
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("user")
-                .short("u")
+            clap::Arg::new("user")
+                .short('u')
                 .long("user")
                 .value_name("user:password")
                 .help("Add basic Authentication header to each request.")
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("variable")
+            clap::Arg::new("user_agent")
+                .short('A')
+                .long("user-agent")
+                .value_name("name")
+                .help("Specify the User-Agent string to send to the HTTP server.")
+                .takes_value(true),
+        )
+        .arg(
+            clap::Arg::new("variable")
                 .long("variable")
                 .value_name("NAME=VALUE")
-                .multiple(true)
+                .multiple_occurrences(true)
                 .number_of_values(1)
                 .help("Define a variable")
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("variables_file")
+            clap::Arg::new("variables_file")
                 .long("variables-file")
                 .value_name("FILE")
                 .help("Define a properties file in which you define your variables")
                 .takes_value(true),
         )
         .arg(
-            clap::Arg::with_name("verbose")
-                .short("v")
+            clap::Arg::new("verbose")
+                .short('v')
                 .long("verbose")
                 .help("Turn on verbose output"),
         )
@@ -329,17 +333,7 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
     let file_root = matches.value_of("file_root").map(|value| value.to_string());
     let follow_location = matches.is_present("follow_location");
     let glob_files = match_glob_files(matches.clone())?;
-    // deprecated
-    // Support --report-html and --html only for the current version
-    if matches.is_present("html") {
-        eprintln!("The option --html is deprecated. It has been renamed to --report-html.");
-        eprintln!("It will be removed in the next version");
-    }
-    let report_html = if let Some(dir) = matches.value_of("html") {
-        Some(dir)
-    } else {
-        matches.value_of("report_html")
-    };
+    let report_html = matches.value_of("report_html");
     let html_dir = if let Some(dir) = report_html {
         let path = Path::new(dir);
         if !path.exists() {
@@ -365,12 +359,9 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
     let include = matches.is_present("include");
     let insecure = matches.is_present("insecure");
     let interactive = matches.is_present("interactive");
-    let junit_file = if let Some(filename) = matches.value_of("junit") {
-        let path = Path::new(filename);
-        Some(path.to_path_buf())
-    } else {
-        None
-    };
+    let junit_file = matches
+        .value_of("junit")
+        .map(|filename| filename.to_string());
     let max_redirect = match matches.value_of("max_redirects") {
         None => Some(50),
         Some("-1") => None,
@@ -410,6 +401,7 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
     };
     let to_entry = to_entry(matches.clone())?;
     let user = matches.value_of("user").map(|x| x.to_string());
+    let user_agent = matches.value_of("user_agent").map(|x| x.to_string());
     let variables = variables(matches.clone())?;
     let verbose = matches.is_present("verbose") || matches.is_present("interactive");
 
@@ -440,6 +432,7 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
         timeout,
         to_entry,
         user,
+        user_agent,
         variables,
         verbose,
     })

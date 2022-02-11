@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ pub struct Slice {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Predicate {
-    pub key: String,
+    pub key: Vec<String>,
     pub func: PredicateFunc,
 }
 

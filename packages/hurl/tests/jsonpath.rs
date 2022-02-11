@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -366,6 +366,41 @@ fn test_key_access() {
         .collect::<Vec<&str>>();
     results.sort_unstable();
     assert_eq!(results, values);
+}
+
+fn fruit_prices_value() -> serde_json::Value {
+    serde_json::from_str(
+        r#"
+          {
+    "fruit": [
+        {
+            "name": "apple",
+            "price": {
+                "US": 100,
+                "UN": 110
+            }
+        },
+        {
+            "name": "grape",
+            "price": {
+                "US": 200,
+                "UN": 150
+            }
+        }
+    ]
+}
+            "#,
+    )
+    .unwrap()
+}
+
+#[test]
+fn test_filter_nested_object() {
+    let expr = jsonpath::parse("$.fruit[?(@.price.US==200)].name").unwrap();
+    assert_eq!(expr.eval(fruit_prices_value()), vec![json!("grape")]);
+
+    let expr = jsonpath::parse("$.fruit[?(@.pricex.US==200)].name").unwrap();
+    assert!(expr.eval(fruit_prices_value()).is_empty());
 }
 
 #[test]

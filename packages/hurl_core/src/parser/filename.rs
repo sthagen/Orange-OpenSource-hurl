@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ use super::ParseResult;
 use crate::ast::*;
 
 pub fn parse(reader: &mut Reader) -> ParseResult<'static, Filename> {
-    // this is an absolute file
+    // This is an absolute file
     // that you have to write with a relative name
     // default root_dir is the hurl directory
     let start = reader.state.clone();
@@ -31,13 +31,6 @@ pub fn parse(reader: &mut Reader) -> ParseResult<'static, Filename> {
         c.is_alphanumeric() || *c == '.' || *c == '/' || *c == '_' || *c == '-'
     });
     if s.is_empty() {
-        return Err(Error {
-            pos: start.pos,
-            recoverable: false,
-            inner: ParseError::Filename {},
-        });
-    }
-    if s.starts_with('/') {
         return Err(Error {
             pos: start.pos,
             recoverable: false,
@@ -99,12 +92,6 @@ mod tests {
     #[test]
     fn test_filename_error() {
         let mut reader = Reader::init("???");
-        let error = parse(&mut reader).err().unwrap();
-        assert_eq!(error.inner, ParseError::Filename {});
-        assert_eq!(error.pos, Pos { line: 1, column: 1 });
-
-        // can not absolute
-        let mut reader = Reader::init("/tmp/data.bin");
         let error = parse(&mut reader).err().unwrap();
         assert_eq!(error.inner, ParseError::Filename {});
         assert_eq!(error.pos, Pos { line: 1, column: 1 });

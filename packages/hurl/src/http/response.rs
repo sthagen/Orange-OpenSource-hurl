@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ impl Response {
     /// return a list of headers values for the given header name
     ///
     pub fn get_header_values(&self, expected_name: String) -> Vec<String> {
-        get_header_values(self.headers.clone(), expected_name)
+        get_header_values(&self.headers, &expected_name)
     }
 
     ///

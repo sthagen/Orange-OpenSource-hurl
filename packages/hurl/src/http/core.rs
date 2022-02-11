@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,13 +145,13 @@ impl FromStr for Cookie {
 }
 
 ///
-/// return a list of headers values for the given header name
+/// Return a list of headers values for the given header name.
 ///
-pub fn get_header_values(headers: Vec<Header>, expected_name: String) -> Vec<String> {
+pub fn get_header_values(headers: &[Header], expected_name: &str) -> Vec<String> {
     headers
         .iter()
         .filter_map(|Header { name, value }| {
-            if name.clone() == expected_name {
+            if name == expected_name {
                 Some(value.to_string())
             } else {
                 None

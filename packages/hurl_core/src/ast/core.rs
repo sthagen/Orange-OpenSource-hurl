@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,15 @@ impl Request {
             }
         }
         return vec![];
+    }
+
+    pub fn basic_auth(self) -> Option<KeyValue> {
+        for section in self.sections {
+            if let SectionValue::BasicAuth(kv) = section.value {
+                return Some(kv);
+            }
+        }
+        None
     }
 }
 
@@ -193,6 +202,7 @@ impl Section {
         match self.value {
             SectionValue::Asserts(_) => "Asserts",
             SectionValue::QueryParams(_) => "QueryStringParams",
+            SectionValue::BasicAuth(_) => "BasicAuth",
             SectionValue::FormParams(_) => "FormParams",
             SectionValue::Cookies(_) => "Cookies",
             SectionValue::Captures(_) => "Captures",
@@ -202,8 +212,10 @@ impl Section {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum SectionValue {
     QueryParams(Vec<KeyValue>),
+    BasicAuth(KeyValue),
     FormParams(Vec<KeyValue>),
     MultipartFormData(Vec<MultipartParam>),
     Cookies(Vec<Cookie>),
@@ -410,6 +422,7 @@ pub enum PredicateValue {
     Hex(Hex),
     Base64(Base64),
     Expression(Expr),
+    Regex(Regex),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -587,6 +600,19 @@ pub struct Hex {
     pub encoded: String,
     pub space1: Whitespace,
 }
+
+// Literal Regex
+#[derive(Clone, Debug)]
+pub struct Regex {
+    pub inner: regex::Regex,
+}
+
+impl PartialEq for Regex {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.to_string() == other.inner.to_string()
+    }
+}
+impl Eq for Regex {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pos {

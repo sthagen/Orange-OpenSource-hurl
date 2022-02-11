@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 use std::collections::HashMap;
 #[allow(unused)]
 use std::io::prelude::*;
+use std::path::Path;
 
 use crate::http;
 use hurl_core::ast::*;
@@ -32,31 +33,41 @@ use crate::runner::multipart::eval_multipart_param;
 pub fn eval_request(
     request: Request,
     variables: &HashMap<String, Value>,
-    context_dir: String,
+    context_dir: &Path,
 ) -> Result<http::RequestSpec, Error> {
     let method = eval_method(request.method.clone());
 
-    let url = eval_template(request.clone().url, variables)?;
+    let url = eval_template(&request.url, variables)?;
 
     // headers
     let mut headers: Vec<http::Header> = vec![];
     for header in request.clone().headers {
         let name = header.key.value;
-        let value = eval_template(header.value, variables)?;
+        let value = eval_template(&header.value, variables)?;
+        headers.push(http::Header { name, value });
+    }
+
+    if let Some(kv) = request.clone().basic_auth() {
+        let value = eval_template(&kv.value, variables)?;
+        let user_password = format!("{}:{}", kv.key.value, value);
+        let authorization = base64::encode(user_password.as_bytes());
+
+        let name = "Authorization".to_string();
+        let value = format!("Basic {}", authorization);
         headers.push(http::Header { name, value });
     }
 
     let mut querystring: Vec<http::Param> = vec![];
     for param in request.clone().querystring_params() {
         let name = param.key.value;
-        let value = eval_template(param.value, variables)?;
+        let value = eval_template(&param.value, variables)?;
         querystring.push(http::Param { name, value });
     }
 
     let mut form: Vec<http::Param> = vec![];
     for param in request.clone().form_params() {
         let name = param.key.value;
-        let value = eval_template(param.value, variables)?;
+        let value = eval_template(&param.value, variables)?;
         form.push(http::Param { name, value });
     }
     //        if !self.clone().form_params().is_empty() {
@@ -76,13 +87,13 @@ pub fn eval_request(
     }
 
     let body = match request.clone().body {
-        Some(body) => eval_body(body, variables, context_dir.clone())?,
+        Some(body) => eval_body(body, variables, context_dir)?,
         None => http::Body::Binary(vec![]),
     };
 
     let mut multipart = vec![];
     for multipart_param in request.clone().multipart_form_data() {
-        let param = eval_multipart_param(multipart_param, variables, context_dir.clone())?;
+        let param = eval_multipart_param(multipart_param, variables, context_dir)?;
         multipart.push(param);
     }
 
@@ -327,7 +338,7 @@ mod tests {
     #[test]
     pub fn test_error_variable() {
         let variables = HashMap::new();
-        let error = eval_request(hello_request(), &variables, "current_dir".to_string())
+        let error = eval_request(hello_request(), &variables, Path::new(""))
             .err()
             .unwrap();
         assert_eq!(error.source_info, SourceInfo::init(1, 7, 1, 15));
@@ -346,8 +357,7 @@ mod tests {
             String::from("base_url"),
             Value::String(String::from("http://localhost:8000")),
         );
-        let http_request =
-            eval_request(hello_request(), &variables, "current_dir".to_string()).unwrap();
+        let http_request = eval_request(hello_request(), &variables, Path::new("")).unwrap();
         assert_eq!(http_request, http::hello_http_request());
     }
 
@@ -358,8 +368,7 @@ mod tests {
             String::from("param1"),
             Value::String(String::from("value1")),
         );
-        let http_request =
-            eval_request(query_request(), &variables, "current_dir".to_string()).unwrap();
+        let http_request = eval_request(query_request(), &variables, Path::new("")).unwrap();
         assert_eq!(http_request, http::query_http_request());
     }
 

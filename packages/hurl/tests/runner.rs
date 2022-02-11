@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ use hurl::runner::RunnerOptions;
 use hurl_core::ast::*;
 use hurl_core::parser;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub fn log_verbose(message: &str) {
     eprintln!("* {}", message);
@@ -40,21 +41,7 @@ fn test_hurl_file() {
     let content = cli::read_to_string(filename).expect("Something went wrong reading the file");
     let hurl_file = parser::parse_hurl_file(content.as_str()).unwrap();
     let variables = HashMap::new();
-    let options = http::ClientOptions {
-        cacert_file: None,
-        follow_location: false,
-        max_redirect: None,
-        cookie_input_file: None,
-        proxy: None,
-        no_proxy: None,
-        verbose: false,
-        insecure: false,
-        timeout: Default::default(),
-        connect_timeout: Default::default(),
-        user: None,
-        compressed: false,
-        context_dir: ".".to_string(),
-    };
+    let options = http::ClientOptions::default();
     let mut client = http::Client::init(options);
     let mut lines: Vec<&str> = regex::Regex::new(r"\n|\r\n")
         .unwrap()
@@ -67,9 +54,9 @@ fn test_hurl_file() {
         fail_fast: false,
         variables,
         to_entry: None,
-        context_dir: "current_dir".to_string(),
+        context_dir: PathBuf::new(),
         ignore_asserts: false,
-        pre_entry: || true,
+        pre_entry: |_| true,
         post_entry: || true,
     };
 
@@ -153,21 +140,7 @@ fn hello_request() -> Request {
 
 #[test]
 fn test_hello() {
-    let options = http::ClientOptions {
-        cacert_file: None,
-        follow_location: false,
-        max_redirect: None,
-        cookie_input_file: None,
-        proxy: None,
-        no_proxy: None,
-        verbose: false,
-        insecure: false,
-        timeout: Default::default(),
-        connect_timeout: Default::default(),
-        user: None,
-        compressed: false,
-        context_dir: ".".to_string(),
-    };
+    let options = http::ClientOptions::default();
     let mut client = http::Client::init(options);
     let source_info = SourceInfo {
         start: Pos { line: 1, column: 1 },
@@ -211,9 +184,9 @@ fn test_hello() {
         fail_fast: true,
         variables,
         to_entry: None,
-        context_dir: "current_dir".to_string(),
+        context_dir: PathBuf::new(),
         ignore_asserts: false,
-        pre_entry: || true,
+        pre_entry: |_| true,
         post_entry: || true,
     };
     let log_verbose: fn(&str) = log_verbose;

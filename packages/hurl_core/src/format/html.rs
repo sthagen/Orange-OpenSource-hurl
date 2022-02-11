@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ impl Htmlable for Response {
 
 impl Htmlable for Method {
     fn to_html(&self) -> String {
-        return format!("<span class=\"method\">{}</span>", self.to_string());
+        return format!("<span class=\"method\">{}</span>", self);
     }
 }
 
@@ -147,7 +147,7 @@ impl Htmlable for Version {
 
 impl Htmlable for Status {
     fn to_html(&self) -> String {
-        format!("<span class=\"number\">{}</span>", self.value.to_string())
+        format!("<span class=\"number\">{}</span>", self.value)
     }
 }
 
@@ -183,6 +183,7 @@ impl Htmlable for SectionValue {
                     buffer.push_str(item.to_html().as_str())
                 }
             }
+            SectionValue::BasicAuth(item) => buffer.push_str(item.to_html().as_str()),
             SectionValue::FormParams(items) => {
                 for item in items {
                     buffer.push_str(item.to_html().as_str())
@@ -214,7 +215,7 @@ impl Htmlable for KeyValue {
         add_line_terminators(&mut buffer, self.line_terminators.clone());
         buffer.push_str("<span class=\"line\">");
         buffer.push_str(self.space0.to_html().as_str());
-        buffer.push_str(format!("<span class=\"string\">{}</span>", self.key.value).as_str());
+        buffer.push_str(format!("<span class=\"string\">{}</span>", self.key.encoded).as_str());
         buffer.push_str(self.space1.to_html().as_str());
         buffer.push_str("<span>:</span>");
         buffer.push_str(self.space2.to_html().as_str());
@@ -628,13 +629,14 @@ impl Htmlable for PredicateValue {
             PredicateValue::Raw(value) => value.to_html(),
             PredicateValue::Integer(value) => format!("<span class=\"number\">{}</span>", value),
             PredicateValue::Float(value) => {
-                format!("<span class=\"number\">{}</span>", value.to_string())
+                format!("<span class=\"number\">{}</span>", value)
             }
             PredicateValue::Bool(value) => format!("<span class=\"boolean\">{}</span>", value),
             PredicateValue::Hex(value) => value.to_html(),
             PredicateValue::Base64(value) => value.to_html(),
             PredicateValue::Expression(value) => value.to_html(),
             PredicateValue::Null {} => "<span class=\"null\">null</span>".to_string(),
+            PredicateValue::Regex(value) => value.to_html(),
         }
     }
 }
@@ -796,6 +798,12 @@ impl Htmlable for Hex {
     }
 }
 
+impl Htmlable for Regex {
+    fn to_html(&self) -> String {
+        let s = str::replace(self.inner.as_str(), "/", "\\/");
+        format!("<span class=\"regex\">/{}/</span>", s)
+    }
+}
 impl Htmlable for EncodedString {
     fn to_html(&self) -> String {
         format!("<span class=\"string\">{}</span>", self.encoded)
@@ -808,7 +816,7 @@ impl Htmlable for Template {
         for element in self.elements.clone() {
             let elem_str = match element {
                 TemplateElement::String { encoded, .. } => encoded,
-                TemplateElement::Expression(expr) => format!("{{{{{}}}}}", expr.to_string()),
+                TemplateElement::Expression(expr) => format!("{{{{{}}}}}", expr),
             };
             s.push_str(elem_str.as_str())
         }
@@ -827,7 +835,7 @@ impl Htmlable for Expr {
 }
 
 fn add_line_terminators(buffer: &mut String, line_terminators: Vec<LineTerminator>) {
-    for line_terminator in line_terminators.clone() {
+    for line_terminator in line_terminators {
         buffer.push_str("<span class=\"line\">");
         if line_terminator.newline.value.is_empty() {
             buffer.push_str("<br>");

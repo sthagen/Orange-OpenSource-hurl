@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -465,6 +465,9 @@ fn json_predicate_value(predicate_value: PredicateValue) -> (JValue, Option<Stri
             Some("base64".to_string()),
         ),
         PredicateValue::Expression(value) => (JValue::String(value.to_string()), None),
+        PredicateValue::Regex(value) => {
+            (JValue::String(value.to_string()), Some("regex".to_string()))
+        }
     }
 }
 
@@ -490,7 +493,7 @@ impl ToJson for hurl_core::ast::JsonValue {
                     .map(|elem| (elem.name.to_string(), elem.value.to_json()))
                     .collect(),
             ),
-            JsonValue::Expression(exp) => JValue::String(format!("{{{{{}}}}}", exp.to_string())),
+            JsonValue::Expression(exp) => JValue::String(format!("{{{{{}}}}}", exp)),
         }
     }
 }

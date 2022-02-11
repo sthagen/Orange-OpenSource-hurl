@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,11 @@
  * The following characters are allowed:
  *   alphanumeric
  *   _ (underscore)
+ *
+ * Filters can be applied to element of an array with the ?(@.key PREDICATE) notation.
+ * The key can can specify one or more levels.
+ * For example, `.price.US` specify field 'US' in an object for the field price.
+ * The predicate if not present just checks the key existence.
  */
 
 pub use self::parser::parse;

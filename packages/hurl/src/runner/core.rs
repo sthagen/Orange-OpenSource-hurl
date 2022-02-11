@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@
  *
  */
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use crate::http;
-use hurl_core::ast::SourceInfo;
+use hurl_core::ast::{Entry, SourceInfo};
 
 use super::value::Value;
 
@@ -27,9 +28,9 @@ pub struct RunnerOptions {
     pub fail_fast: bool,
     pub variables: HashMap<String, Value>,
     pub to_entry: Option<usize>,
-    pub context_dir: String,
+    pub context_dir: PathBuf,
     pub ignore_asserts: bool,
-    pub pre_entry: fn() -> bool,
+    pub pre_entry: fn(Entry) -> bool,
     pub post_entry: fn() -> bool,
 }
 
@@ -188,6 +189,10 @@ pub enum RunnerError {
 
     UnrenderableVariable {
         value: String,
+    },
+
+    UnauthorizedFileAccess {
+        path: PathBuf,
     },
 }
 

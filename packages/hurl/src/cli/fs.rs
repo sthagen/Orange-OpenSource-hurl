@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ pub fn read_to_string(filename: &str) -> Result<String, CliError> {
         let mut contents = String::new();
         return if let Err(e) = std::io::stdin().read_to_string(&mut contents) {
             Err(CliError {
-                message: format!("Input stream can not be read - {}", e.to_string()),
+                message: format!("Input stream can not be read - {}", e),
             })
         } else {
             return Ok(contents);

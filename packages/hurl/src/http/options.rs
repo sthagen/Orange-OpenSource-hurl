@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  * limitations under the License.
  *
  */
+use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -30,8 +31,9 @@ pub struct ClientOptions {
     pub timeout: Duration,
     pub connect_timeout: Duration,
     pub user: Option<String>,
+    pub user_agent: Option<String>,
     pub compressed: bool,
-    pub context_dir: String,
+    pub context_dir: PathBuf,
 }
 
 impl Default for ClientOptions {
@@ -45,11 +47,12 @@ impl Default for ClientOptions {
             no_proxy: None,
             verbose: false,
             insecure: false,
-            timeout: Duration::new(300, 0),
-            connect_timeout: Duration::new(300, 0),
+            timeout: Duration::from_secs(300),
+            connect_timeout: Duration::from_secs(300),
             user: None,
+            user_agent: None,
             compressed: false,
-            context_dir: ".".to_string(),
+            context_dir: PathBuf::new(),
         }
     }
 }
@@ -58,9 +61,9 @@ impl ClientOptions {
     pub fn curl_args(&self) -> Vec<String> {
         let mut arguments = vec![];
 
-        if let Some(cacert_file) = self.cacert_file.clone() {
+        if let Some(ref cacert_file) = self.cacert_file {
             arguments.push("--cacert".to_string());
-            arguments.push(cacert_file);
+            arguments.push(cacert_file.clone());
         }
 
         if self.compressed {
@@ -72,9 +75,9 @@ impl ClientOptions {
             arguments.push(self.connect_timeout.as_secs().to_string());
         }
 
-        if let Some(cookie_file) = self.cookie_input_file.clone() {
+        if let Some(ref cookie_file) = self.cookie_input_file {
             arguments.push("--cookie".to_string());
-            arguments.push(cookie_file);
+            arguments.push(cookie_file.clone());
         }
 
         if self.insecure {
@@ -91,7 +94,7 @@ impl ClientOptions {
             arguments.push("--max-redirs".to_string());
             arguments.push(max_redirect.to_string());
         }
-        if let Some(proxy) = self.proxy.clone() {
+        if let Some(ref proxy) = self.proxy {
             arguments.push("--proxy".to_string());
             arguments.push(format!("'{}'", proxy));
         }
@@ -99,9 +102,13 @@ impl ClientOptions {
             arguments.push("--timeout".to_string());
             arguments.push(self.timeout.as_secs().to_string());
         }
-        if let Some(user) = self.user.clone() {
+        if let Some(ref user) = self.user {
             arguments.push("--user".to_string());
             arguments.push(format!("'{}'", user));
+        }
+        if let Some(ref user_agent) = self.user_agent {
+            arguments.push("--user-agent".to_string());
+            arguments.push(format!("'{}'", user_agent));
         }
         arguments
     }
@@ -125,11 +132,12 @@ mod tests {
                 no_proxy: None,
                 verbose: true,
                 insecure: true,
-                timeout: Duration::new(10, 0),
-                connect_timeout: Duration::new(20, 0),
+                timeout: Duration::from_secs(10),
+                connect_timeout: Duration::from_secs(20),
                 user: Some("user:password".to_string()),
+                user_agent: Some("my-useragent".to_string()),
                 compressed: true,
-                context_dir: "".to_string()
+                context_dir: PathBuf::new()
             }
             .curl_args(),
             [
@@ -147,7 +155,9 @@ mod tests {
                 "--timeout".to_string(),
                 "10".to_string(),
                 "--user".to_string(),
-                "'user:password'".to_string()
+                "'user:password'".to_string(),
+                "--user-agent".to_string(),
+                "'my-useragent'".to_string(),
             ]
         );
     }

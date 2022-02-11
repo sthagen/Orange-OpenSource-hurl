@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ fn request_section(reader: &mut Reader) -> ParseResult<'static, Section> {
     let line_terminator0 = line_terminator(reader)?;
     let value = match name.as_str() {
         "QueryStringParams" => section_value_query_params(reader)?,
+        "BasicAuth" => section_value_basic_auth(reader)?,
         "FormParams" => section_value_form_params(reader)?,
         "MultipartFormData" => section_value_multipart_form_data(reader)?,
         "Cookies" => section_value_cookies(reader)?,
@@ -119,6 +120,11 @@ fn section_value_query_params(reader: &mut Reader) -> ParseResult<'static, Secti
     Ok(SectionValue::QueryParams(items))
 }
 
+fn section_value_basic_auth(reader: &mut Reader) -> ParseResult<'static, SectionValue> {
+    let kv = key_value(reader)?;
+    Ok(SectionValue::BasicAuth(kv))
+}
+
 fn section_value_form_params(reader: &mut Reader) -> ParseResult<'static, SectionValue> {
     let items = zero_or_more(key_value, reader)?;
     Ok(SectionValue::FormParams(items))
@@ -175,7 +181,7 @@ fn cookie_value(reader: &mut Reader) -> CookieValue {
         c.is_ascii_alphanumeric()
             || vec![
                 '!', '#', '$', '%', '&', '\'', '(', ')', '*', '+', '-', '.', '/', ':', '<', '=',
-                '>', '?', '@', '[', ']', '^', '_', '`', '~',
+                '>', '?', '@', '[', ']', '^', '_', '`', '~', '|', '"', ';', ',',
             ]
             .contains(c)
     });
@@ -487,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_cookie_error() {
-        let mut reader = Reader::init("Foo: \"Bar\"");
+        let mut reader = Reader::init("Foo: {Bar}");
         let error = cookie(&mut reader).err().unwrap();
         assert_eq!(error.pos, Pos { line: 1, column: 6 });
         assert!(!error.recoverable);
@@ -513,7 +519,7 @@ mod tests {
         assert_eq!(
             cookie_value(&mut reader),
             CookieValue {
-                value: String::from("")
+                value: String::from("\"Bar\"")
             }
         );
     }

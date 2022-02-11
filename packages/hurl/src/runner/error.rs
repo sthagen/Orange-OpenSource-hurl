@@ -49,6 +49,7 @@ impl Error for runner::Error {
             RunnerError::UnsupportedContentEncoding(..) => "Decompression Error".to_string(),
             RunnerError::CouldNotUncompressResponse(..) => "Decompression Error".to_string(),
             RunnerError::InvalidJson { .. } => "Invalid Json".to_string(),
+            RunnerError::UnauthorizedFileAccess { .. } => "Unauthorized file access".to_string(),
         }
     }
 
@@ -69,7 +70,7 @@ impl Error for runner::Error {
             RunnerError::AssertVersion { actual, .. } => format!("actual value is <{}>", actual),
             RunnerError::AssertStatus { actual, .. } => format!("actual value is <{}>", actual),
             RunnerError::PredicateValue(value) => {
-                format!("actual value is <{}>", value.to_string())
+                format!("actual value is <{}>", value)
             }
             RunnerError::InvalidRegex {} => "Regex expression is not valid".to_string(),
             RunnerError::FileReadAccess { value } => format!("File {} can not be read", value),
@@ -137,6 +138,12 @@ impl Error for runner::Error {
             }
             RunnerError::InvalidJson { value } => {
                 format!("actual value is <{}>", value)
+            }
+            RunnerError::UnauthorizedFileAccess { path } => {
+                format!(
+                    "Unauthorized access to file {}, check --file-root option",
+                    path.to_str().unwrap()
+                )
             }
         }
     }

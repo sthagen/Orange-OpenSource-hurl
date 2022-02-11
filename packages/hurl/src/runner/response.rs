@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
  *
  */
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::http;
 use hurl_core::ast::*;
@@ -32,7 +33,7 @@ pub fn eval_asserts(
     response: Response,
     variables: &HashMap<String, Value>,
     http_response: http::Response,
-    context_dir: String,
+    context_dir: &Path,
 ) -> Vec<AssertResult> {
     let mut asserts = vec![];
 
@@ -53,7 +54,7 @@ pub fn eval_asserts(
     }
 
     for header in response.clone().headers {
-        match eval_template(header.value.clone(), variables) {
+        match eval_template(&header.value, variables) {
             Err(e) => {
                 asserts.push(AssertResult::Header {
                     actual: Err(e),
@@ -154,7 +155,7 @@ pub fn eval_asserts(
                 })
             }
             Bytes::RawString(RawString { value, .. }) => {
-                let expected = match eval_template(value.clone(), variables) {
+                let expected = match eval_template(&value, variables) {
                     Ok(s) => Ok(Value::String(s)),
                     Err(e) => Err(e),
                 };
@@ -292,7 +293,7 @@ mod tests {
     #[test]
     pub fn test_eval_asserts() {
         let variables = HashMap::new();
-        let context_dir = "undefined".to_string();
+        let context_dir = Path::new("");
         assert_eq!(
             eval_asserts(
                 user_response(),

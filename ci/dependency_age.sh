@@ -10,7 +10,7 @@ color_reset=$(echo -ne "\033[0m")
 for package in packages/* ; do
   echo -e "\n=> dependency age for ${package}\n"
   while read -r dependency actual_version ; do
-    last_version=$(curl -kLs https://crates.io/api/v1/crates/${dependency} | jq -r .crate.max_stable_version | grep --extended-regexp "^[0-9].*.[0-9].*.[0-9]$")
+    last_version=$(curl -kLs "https://crates.io/api/v1/crates/${dependency}" | jq -r .crate.max_stable_version | grep --extended-regexp "^[0-9].*.[0-9].*.[0-9]$")
     if [ -z "${last_version}" ] ; then
       echo "${color_red}runtime error${color_reset}, i could not get last version from https://docs.rs/${dependency}"
       exit 1
@@ -26,7 +26,7 @@ for package in packages/* ; do
     fi 
     else
       if [ "$1" = "--update" ] ; then
-        sed --in-place "s/${dependency}.*=.*\"${actual_version}\"/${dependency} = \"${last_version}\"/g" "${package}/Cargo.toml"
+        sed -i" " "s/${dependency}.*=.*\"${actual_version}\"/${dependency} = \"${last_version}\"/g" "${package}/Cargo.toml"
 	grep --silent "${dependency} = \"${last_version}\"" "${package}/Cargo.toml" && \
 	echo "${color_blue}old, updated to ${last_version}${color_reset}" || \
 	echo "${color_red}error, update to ${last_version} fails, please check ${package}/Cargo.toml format and syntax${color_reset}"
@@ -36,10 +36,10 @@ for package in packages/* ; do
       ((exit_code++))
     fi
 
-  done < <(sed --silent "/dependencies\]/,/^$/p" "${package}/Cargo.toml" | grep --extended-regexp --invert-match "\[|path|^$" | tr --delete '" ' | tr '=' ' ')
+  done < <(sed -n "/dependencies\]/,/^$/p" "${package}/Cargo.toml" | grep --extended-regexp --invert-match "\[|path|^$" | tr -d '" ' | tr '=' ' ')
 done
 
 if [ "$1" != "--update" ] && [ "${exit_code}" -gt 0 ] ; then
   echo -e "\n${color_yellow}...Consider executing \"dependency_age.sh --update\" to automatically update ${exit_code} old dependencies on your Cargo.toml files${color_reset}"
 fi
-exit $exit_code
+exit "$exit_code"

@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,11 +26,12 @@ use super::json::eval_json_value;
 use super::template::eval_template;
 use super::value::Value;
 use crate::http;
+use crate::runner::path;
 
 pub fn eval_body(
     body: Body,
     variables: &HashMap<String, Value>,
-    context_dir: String,
+    context_dir: &Path,
 ) -> Result<http::Body, Error> {
     eval_bytes(body.value, variables, context_dir)
 }
@@ -38,12 +39,12 @@ pub fn eval_body(
 pub fn eval_bytes(
     bytes: Bytes,
     variables: &HashMap<String, Value>,
-    context_dir: String,
+    context_dir: &Path,
 ) -> Result<http::Body, Error> {
     match bytes {
         // Body::Text
         Bytes::RawString(RawString { value, .. }) => {
-            let value = eval_template(value, variables)?;
+            let value = eval_template(&value, variables)?;
             Ok(http::Body::Text(value))
         }
         Bytes::Xml { value, .. } => Ok(http::Body::Text(value)),
@@ -57,21 +58,24 @@ pub fn eval_bytes(
         Bytes::File(File { filename, .. }) => {
             let f = filename.value.as_str();
             let path = Path::new(f);
-            let absolute_filename = if path.is_absolute() {
-                filename.clone().value
-            } else {
-                Path::new(context_dir.as_str())
-                    .join(f)
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-            };
-            match std::fs::read(absolute_filename.clone()) {
+            let absolute_path = context_dir.join(path);
+            // In order not to leak any private date, we check that the user provided file
+            // is a child of the context directory.
+            if !path::is_descendant(&absolute_path, context_dir) {
+                return Err(Error {
+                    source_info: filename.source_info,
+                    inner: RunnerError::UnauthorizedFileAccess {
+                        path: absolute_path,
+                    },
+                    assert: false,
+                });
+            }
+            match std::fs::read(&absolute_path) {
                 Ok(value) => Ok(http::Body::File(value, f.to_string())),
                 Err(_) => Err(Error {
                     source_info: filename.source_info,
                     inner: RunnerError::FileReadAccess {
-                        value: absolute_filename,
+                        value: absolute_path.to_str().unwrap().to_string(),
                     },
                     assert: false,
                 }),
@@ -105,7 +109,7 @@ mod tests {
 
         let variables = HashMap::new();
         assert_eq!(
-            eval_bytes(bytes, &variables, ".".to_string()).unwrap(),
+            eval_bytes(bytes, &variables, Path::new("")).unwrap(),
             http::Body::File(b"Hello World!".to_vec(), "tests/data.bin".to_string())
         );
     }
@@ -130,7 +134,7 @@ mod tests {
         let variables = HashMap::new();
 
         let separator = if cfg!(windows) { "\\" } else { "/" };
-        let error = eval_bytes(bytes, &variables, "current_dir".to_string())
+        let error = eval_bytes(bytes, &variables, Path::new("current_dir"))
             .err()
             .unwrap();
         assert_eq!(

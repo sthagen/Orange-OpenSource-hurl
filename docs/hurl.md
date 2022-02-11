@@ -168,18 +168,14 @@ When this is not explicitly defined, the files are relative to the current direc
 
 ### --glob <glob> {#glob}
 
-Specify input files that match the given blob. 
-Multiple glob flags may be used.
+Specify input files that match the given blob.
+
+Multiple glob flags may be used. This flag supports common Unix glob patterns like *, ? and []. 
+However, to avoid your shell accidentally expanding glob patterns before Hurl handles them, you must use single quotes or double quotes around each pattern.
 
 ### -h, --help {#help}
 
 Usage help. This lists all current command line options with a short description.
-
-### --html <dir> {#html}
-
-Generate html report in dir.
-
-If the html report already exists, it will be updated with the new test results.
 
 ### --ignore-asserts {#ignore-asserts}
 
@@ -197,7 +193,6 @@ This is similar to a break point, You can then continue (Press C) or quit (Press
 ### --json {#json}
 
 Output each hurl file result to JSON. The format is very closed to HAR format. 
-
 
 ### -k, --insecure {#insecure}
 
@@ -244,13 +239,25 @@ Write output to <file> instead of stdout.
 
 Print filename and status for each test (on stderr)
 
+### --report-junit <file> {#report-junit}
+
+Generate JUNIT <file>.
+
+If the <file> report already exists, it will be updated with the new test results.
+
+### --report-html <dir> {#report-html}
+
+Generate HTML report in dir.
+
+If the HTML report already exists, it will be updated with the new test results.
+
 ### --summary {#summary}
 
 Print test metrics at the end of the run (on stderr)
 
 ### --test {#test}
 
-Activate test mode; equals --no-output --progress --summary
+Activate test mode; equals [--no-output](#no-output) [--progress](#progress) [--summary](#summary)
 
 ### -x, --proxy [protocol://]host[:port] {#proxy}
 

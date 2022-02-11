@@ -47,6 +47,20 @@ jobs:
       run: |
         ./ci/dependency_age.sh
 
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Check Shell Scripts
+        run: |
+          find -name *.sh | xargs shellcheck
+      - name: Check Python Scripts
+        run: |
+          pip3 install black
+          black --check .
+
+
   benchsuite:
     runs-on: ubuntu-latest
     steps:
@@ -108,7 +122,7 @@ jobs:
         cargo --version
     - name: Build
       run: |
-        cargo build --verbose
+        cargo build --verbose --locked
     - name: Test Prequisites
       run: |
         sudo apt update
@@ -120,14 +134,14 @@ jobs:
         wget https://snapshots.mitmproxy.org/5.2/mitmproxy-5.2-linux.tar.gz -O - | tar -xz && ./mitmdump -p 8888 --modify-header "/From-Proxy/Hello" &
     - name: Run Tests units
       run: |
-        cargo test --features strict -- --test-threads 1
+        cargo test --features strict
     - name: Run Integration Tests
       run: |
          export PATH="$PWD/target/debug:$PATH"
          cd integration
          pip install lxml bs4
          ./integration.py
-         ./test_curl_commands.sh tests/*.curl
+         ./test_curl_commands.sh $(find ./tests -maxdepth 1 -type f -name '*.curl' ! -name '*windows*')
          ./test_html_output.py tests/*.html
          xmllint --noout tests/*.html
          ./report.sh
@@ -158,7 +172,10 @@ jobs:
           uname -m
           echo "----- install build prerequisites -----"
           pacman -Syy --noconfirm
-          pacman -Sy --noconfirm curl icu base-devel libxml2 python3 cargo
+          pacman -Sy --noconfirm curl icu base-devel libxml2 python3
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
+          sh rustup.sh -y
+          source $HOME/.cargo/env
           curl -O https://bootstrap.pypa.io/get-pip.py
           python3 get-pip.py
           rustc --version
@@ -175,7 +192,7 @@ jobs:
           mitmdump -p 8888 --modify-header "/From-Proxy/Hello" >mitmdump.log 2>&1 &
           ps auxww | grep -v grep | grep -E "server.py|mitmdump"
           echo "----- tests units -----"
-          cargo test --features strict -- --test-threads 1
+          cargo test --features strict
           echo "----- integration tests -----"
           ./integration.py
     - name: Archive production artifacts
@@ -203,7 +220,10 @@ jobs:
           uname -a
           uname -m
           echo "----- install build prerequisites -----"
-          yum install -y procps gcc libxml2-devel openssl-devel libcurl-devel python3-devel python3-pip cargo
+          yum install -y procps gcc libxml2-devel openssl-devel libcurl-devel python3-devel python3-pip
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
+          sh rustup.sh -y
+          source $HOME/.cargo/env
           rustc --version
           cargo --version
           echo "----- build -----"
@@ -219,7 +239,7 @@ jobs:
           mitmdump -p 8888 --modify-header "/From-Proxy/Hello" >mitmdump.log 2>&1 &
           ps auxww | grep -v grep | grep -E "server.py|mitmdump"
           echo "----- tests units -----"
-          cargo test --features strict -- --test-threads 1
+          cargo test --features strict
           echo "----- integration tests -----"
           ./integration.py
     - name: Archive production artifacts
@@ -241,14 +261,17 @@ jobs:
       uses: addnab/docker-run-action@v3
       with:
         image: alpine
-        options: --volume ${{ github.workspace }}:/work --workdir /work --privileged --env CARGO_TERM_COLOR=always
+        options: --volume ${{ github.workspace }}:/work --workdir /work --privileged --env CARGO_TERM_COLOR=always --env RUSTFLAGS=-Ctarget-feature=-crt-static
         run: |
           set -eu
           uname -a
           uname -m
           echo "----- install build prerequisites -----"
           apk update --quiet
-          apk add --quiet bash cargo curl build-base libffi-dev libxml2-dev libxml2-utils openssl-dev python3 python3-dev py3-pip
+          apk add --quiet bash curl build-base libffi-dev libxml2-dev libxml2-utils openssl-dev python3 python3-dev py3-pip
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
+          sh rustup.sh -y
+          source $HOME/.cargo/env
           rustc --version
           cargo --version
           echo "----- build -----"
@@ -264,7 +287,7 @@ jobs:
           mitmdump -p 8888 --modify-header "/From-Proxy/Hello" >mitmdump.log 2>&1 &
           ps auxww | grep -v grep | grep -E "server.py|mitmdump"
           echo "----- tests units -----"
-          cargo test --features strict -- --test-threads 1
+          cargo test --features strict --tests
           echo "----- integration tests -----"
           ./integration.py
     - name: Archive production artifacts
@@ -307,7 +330,7 @@ jobs:
         wget https://snapshots.mitmproxy.org/5.2/mitmproxy-5.2-osx.tar.gz -O - | tar -xz && ./mitmdump -p 8888 --modify-header "/From-Proxy/Hello" &
     - name: Run Tests units
       run: |
-        cargo test -- --test-threads 1
+        cargo test
     - name: Run Integration Tests
       run: |
          export PATH="$PWD/target/debug:$PATH"
@@ -355,8 +378,6 @@ jobs:
         Expand-Archive -PassThru -Force -LiteralPath .\ci\windows\vcpkg_installed.zip -DestinationPath C:\vcpkg\
         Get-ChildItem C:\vcpkg\installed
         vcpkg integrate install
-        # fix known win build bugs
-        (Get-Content .\packages\hurl\src\runner\hurl_file.rs).replace('```', '') | Set-Content .\packages\hurl\src\runner\hurl_file.rs
         # install proxy and server
         pip3 install Flask mitmproxy   
     - name: Run Tests units
@@ -369,7 +390,7 @@ jobs:
         Get-Job -Name mitmdump
         Start-Sleep 5
         cd ..
-        cargo test --verbose -- --test-threads 1
+        cargo test --features strict --tests
     - name: Run Integration tests
       run: |
         cargo build --release --verbose

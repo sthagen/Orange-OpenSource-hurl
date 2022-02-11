@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,10 @@ pub fn predicate_value(reader: &mut Reader) -> ParseResult<'static, PredicateVal
                 Ok(value) => Ok(PredicateValue::Raw(value)),
                 Err(e) => Err(e),
             },
+            |p1| match regex(p1) {
+                Ok(value) => Ok(PredicateValue::Regex(value)),
+                Err(e) => Err(e),
+            },
         ],
         reader,
     )
@@ -115,6 +119,26 @@ mod tests {
         let error = predicate_value(&mut reader).err().unwrap();
         assert_eq!(error.pos, Pos { line: 1, column: 1 });
         assert_eq!(error.inner, ParseError::PredicateValue {});
+        assert!(!error.recoverable);
+    }
+
+    #[test]
+    fn test_predicate_value_error_missing_quote() {
+        let mut reader = Reader::init("\"not_found");
+        let error = predicate_value(&mut reader).err().unwrap();
+        assert_eq!(
+            error.pos,
+            Pos {
+                line: 1,
+                column: 11
+            }
+        );
+        assert_eq!(
+            error.inner,
+            ParseError::Expecting {
+                value: "\"".to_string()
+            }
+        );
         assert!(!error.recoverable);
     }
 }

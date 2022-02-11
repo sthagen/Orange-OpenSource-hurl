@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ const EXIT_ERROR_UNDEFINED: i32 = 127;
 #[cfg(target_family = "windows")]
 pub fn init_colored() {
     colored::control::set_override(true);
-    colored::control::set_virtual_terminal(true);
+    colored::control::set_virtual_terminal(true).expect("set virtual terminal");
 }
 
 #[cfg(target_family = "unix")]
@@ -119,7 +119,7 @@ fn execute(
             log_verbose(format!("insecure: {}", cli_options.insecure).as_str());
             log_verbose(format!("follow redirect: {}", cli_options.follow_location).as_str());
             if let Some(n) = cli_options.max_redirect {
-                log_verbose(format!("max redirect: {}", n.to_string()).as_str());
+                log_verbose(format!("max redirect: {}", n).as_str());
             }
             if let Some(proxy) = cli_options.proxy.clone() {
                 log_verbose(format!("proxy: {}", proxy).as_str());
@@ -135,12 +135,8 @@ fn execute(
             if let Some(to_entry) = cli_options.to_entry {
                 if to_entry < hurl_file.entries.len() {
                     log_verbose(
-                        format!(
-                            "executing {}/{} entries",
-                            to_entry.to_string(),
-                            hurl_file.entries.len().to_string()
-                        )
-                        .as_str(),
+                        format!("executing {}/{} entries", to_entry, hurl_file.entries.len())
+                            .as_str(),
                     );
                 } else {
                     log_verbose("executing all entries");
@@ -159,18 +155,18 @@ fn execute(
             let timeout = cli_options.timeout;
             let connect_timeout = cli_options.connect_timeout;
             let user = cli_options.user;
+            let user_agent = cli_options.user_agent;
             let compressed = cli_options.compressed;
             let context_dir = match cli_options.file_root {
                 None => {
                     if filename == "-" {
-                        current_dir.to_str().unwrap().to_string()
+                        current_dir
                     } else {
                         let path = Path::new(filename);
-                        let parent = path.parent();
-                        parent.unwrap().to_str().unwrap().to_string()
+                        path.parent().unwrap()
                     }
                 }
-                Some(filename) => filename,
+                Some(ref filename) => Path::new(filename),
             };
             let options = http::ClientOptions {
                 cacert_file,
@@ -184,8 +180,9 @@ fn execute(
                 timeout,
                 connect_timeout,
                 user,
+                user_agent,
                 compressed,
-                context_dir: context_dir.clone(),
+                context_dir: context_dir.to_path_buf(),
             };
 
             let mut client = http::Client::init(options);
@@ -193,7 +190,7 @@ fn execute(
             let pre_entry = if cli_options.interactive {
                 cli::interactive::pre_entry
             } else {
-                || false
+                |_| false
             };
             let post_entry = if cli_options.interactive {
                 cli::interactive::post_entry
@@ -204,7 +201,7 @@ fn execute(
                 fail_fast: cli_options.fail_fast,
                 variables: cli_options.variables,
                 to_entry: cli_options.to_entry,
-                context_dir,
+                context_dir: context_dir.to_path_buf(),
                 ignore_asserts: cli_options.ignore_asserts,
                 pre_entry,
                 post_entry,
@@ -251,7 +248,7 @@ fn main() {
         clap::crate_version!(),
         http::libcurl_version_info().join(" ")
     );
-    let app = cli::app().version(version_info.as_str());
+    let app = cli::app(version_info.as_str());
     let matches = app.clone().get_matches();
     init_colored();
 
@@ -298,19 +295,7 @@ fn main() {
     };
 
     let start = Instant::now();
-
-    let doc = if let Ok(doc) = report::create_or_get_junit_report(cli_options.junit_file.clone()) {
-        doc
-    } else {
-        log_error_message(false, "Error creating Junit XML report");
-        std::process::exit(EXIT_ERROR_UNDEFINED);
-    };
-    let mut testsuite = if let Ok(doc) = report::add_testsuite(&doc) {
-        doc
-    } else {
-        log_error_message(false, "Error creating Junit XML report");
-        std::process::exit(EXIT_ERROR_UNDEFINED);
-    };
+    let mut testcases = vec![];
 
     for (current, filename) in filenames.iter().enumerate() {
         let contents = match cli::read_to_string(filename) {
@@ -350,11 +335,8 @@ fn main() {
                 if let Some(response) = entry_result.response.clone() {
                     let mut output = vec![];
                     if cli_options.include {
-                        let status_line = format!(
-                            "HTTP/{} {}\n",
-                            response.version.to_string(),
-                            response.status.to_string()
-                        );
+                        let status_line =
+                            format!("HTTP/{} {}\n", response.version, response.status);
                         output.append(&mut status_line.into_bytes());
                         for header in response.headers.clone() {
                             let header_line = format!("{}: {}\n", header.name, header.value);
@@ -421,18 +403,17 @@ fn main() {
             );
         }
         if cli_options.junit_file.is_some() {
-            unwrap_or_exit(
-                &log_error_message,
-                report::add_testcase(&doc, &mut testsuite, hurl_result, &lines),
-            );
+            let testcase = report::Testcase::from_hurl_result(&hurl_result, &lines);
+            testcases.push(testcase);
         }
     }
 
-    if let Some(file_path) = cli_options.junit_file.clone() {
-        log_verbose(format!("Writing Junit report to {}", file_path.display()).as_str());
-        if doc.save_file(&file_path.to_string_lossy()).is_err() {
-            log_error_message(false, format!("Failed to save to {:?}", file_path).as_str());
-        }
+    if let Some(filename) = cli_options.junit_file.clone() {
+        log_verbose(format!("Writing Junit report to {}", filename).as_str());
+        unwrap_or_exit(
+            &log_error_message,
+            report::create_junit_report(filename, testcases),
+        );
     }
 
     if let Some(dir_path) = cli_options.html_dir {
@@ -470,7 +451,7 @@ fn main() {
 fn exit_code(hurl_results: Vec<HurlResult>) -> i32 {
     let mut count_errors_runner = 0;
     let mut count_errors_assert = 0;
-    for hurl_result in hurl_results.clone() {
+    for hurl_result in hurl_results {
         let errors = hurl_result.clone().errors();
         if errors.is_empty() {
         } else if errors.iter().filter(|e| !e.assert).cloned().count() == 0 {

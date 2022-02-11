@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -300,13 +300,13 @@ impl Client {
     fn set_headers(&mut self, request: &RequestSpec) {
         let mut list = easy::List::new();
 
-        for header in request.headers.clone() {
+        for header in &request.headers {
             list.append(format!("{}: {}", header.name, header.value).as_str())
                 .unwrap();
         }
 
-        if get_header_values(request.headers.clone(), "Content-Type".to_string()).is_empty() {
-            if let Some(s) = request.content_type.clone() {
+        if get_header_values(&request.headers, "Content-Type").is_empty() {
+            if let Some(ref s) = request.content_type {
                 list.append(format!("Content-Type: {}", s).as_str())
                     .unwrap();
             } else {
@@ -314,24 +314,28 @@ impl Client {
             }
         }
 
-        if get_header_values(request.headers.clone(), "Expect".to_string()).is_empty() {
+        if get_header_values(&request.headers, "Expect").is_empty() {
             list.append("Expect:").unwrap(); // remove header Expect
         }
 
-        if get_header_values(request.headers.clone(), "User-Agent".to_string()).is_empty() {
-            list.append(format!("User-Agent: hurl/{}", clap::crate_version!()).as_str())
+        if get_header_values(&request.headers, "User-Agent").is_empty() {
+            let user_agent = match self.options.user_agent {
+                Some(ref u) => u.clone(),
+                None => format!("hurl/{}", clap::crate_version!()),
+            };
+            list.append(format!("User-Agent: {}", user_agent).as_str())
                 .unwrap();
         }
 
-        if let Some(user) = self.options.user.clone() {
+        if let Some(ref user) = self.options.user {
             let authorization = base64::encode(user.as_bytes());
-            if get_header_values(request.headers.clone(), "Authorization".to_string()).is_empty() {
+            if get_header_values(&request.headers, "Authorization").is_empty() {
                 list.append(format!("Authorization: Basic {}", authorization).as_str())
                     .unwrap();
             }
         }
         if self.options.compressed
-            && get_header_values(request.headers.clone(), "Accept-Encoding".to_string()).is_empty()
+            && get_header_values(&request.headers, "Accept-Encoding").is_empty()
         {
             list.append("Accept-Encoding: gzip, deflate, br").unwrap();
         }
@@ -459,7 +463,7 @@ impl Client {
         if !(300..400).contains(&response_code) {
             return None;
         }
-        let location = match get_header_values(response.headers, "Location".to_string()).get(0) {
+        let location = match get_header_values(&response.headers, "Location").get(0) {
             None => return None,
             Some(value) => value.clone(),
         };
@@ -515,7 +519,8 @@ impl Client {
     ///
     pub fn curl_command_line(&mut self, http_request: &RequestSpec) -> String {
         let mut arguments = vec!["curl".to_string()];
-        arguments.append(&mut http_request.curl_args(self.options.context_dir.clone()));
+        let context_dir = &self.options.context_dir;
+        arguments.append(&mut http_request.curl_args(context_dir));
 
         let cookies = all_cookies(self.get_cookie_storage(), http_request);
         if !cookies.is_empty() {

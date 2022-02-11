@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ impl Value {
                 serde_json::Value::String(encoded)
             }
             Value::Null => serde_json::Value::Null,
+            Value::Regex(value) => serde_json::Value::String(value.to_string()),
             Value::Unit => todo!("how to serialize that in json?"),
         }
     }

@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ fn eval_regex(
     variables: &HashMap<String, Value>,
     source_info: SourceInfo,
 ) -> Result<Option<Value>, Error> {
-    let templ = eval_template(expr.clone(), variables)?;
+    let templ = eval_template(&expr, variables)?;
     match value {
         Value::String(s) => match Regex::new(templ.as_str()) {
             Ok(re) => match re.captures(s.as_str()) {

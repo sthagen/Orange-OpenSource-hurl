@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,12 +33,12 @@ use super::value::Value;
 pub fn eval_multipart_param(
     multipart_param: MultipartParam,
     variables: &HashMap<String, Value>,
-    context_dir: String,
+    context_dir: &Path,
 ) -> Result<http::MultipartParam, Error> {
     match multipart_param {
         MultipartParam::Param(KeyValue { key, value, .. }) => {
             let name = key.value;
-            let value = eval_template(value, variables)?;
+            let value = eval_template(&value, variables)?;
             Ok(http::MultipartParam::Param(http::Param { name, value }))
         }
         MultipartParam::FileParam(param) => {
@@ -50,7 +50,7 @@ pub fn eval_multipart_param(
 
 pub fn eval_file_param(
     file_param: FileParam,
-    context_dir: String,
+    context_dir: &Path,
 ) -> Result<http::FileParam, Error> {
     let name = file_param.key.value;
 
@@ -59,7 +59,7 @@ pub fn eval_file_param(
     let absolute_filename = if path.is_absolute() {
         filename.value.clone()
     } else {
-        Path::new(context_dir.as_str())
+        context_dir
             .join(filename.value.clone())
             .to_str()
             .unwrap()
@@ -179,7 +179,7 @@ mod tests {
                     },
                     line_terminator0: line_terminator,
                 },
-                "tests".to_string()
+                Path::new("tests")
             )
             .unwrap(),
             http::FileParam {

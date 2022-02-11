@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,11 @@ pub fn eval_predicate_value(
 ) -> Result<Value, Error> {
     match predicate_value {
         PredicateValue::String(template) => {
-            let s = eval_template(template, variables)?;
+            let s = eval_template(&template, variables)?;
             Ok(Value::String(s))
         }
         PredicateValue::Raw(value) => {
-            let s = eval_template(value.value, variables)?;
+            let s = eval_template(&value.value, variables)?;
             Ok(Value::String(s))
         }
         PredicateValue::Integer(value) => Ok(Value::Integer(value)),
@@ -47,5 +47,6 @@ pub fn eval_predicate_value(
             let value = eval_expr(expr, variables)?;
             Ok(value)
         }
+        PredicateValue::Regex(regex) => Ok(Value::Regex(regex.inner)),
     }
 }

@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -244,6 +244,9 @@ impl Tokenizable for SectionValue {
                     &mut tokens,
                     items.iter().flat_map(|e| e.tokenize()).collect(),
                 );
+            }
+            SectionValue::BasicAuth(item) => {
+                tokens.append(&mut item.tokenize());
             }
             SectionValue::FormParams(items) => {
                 add_tokens(
@@ -650,6 +653,7 @@ impl Tokenizable for PredicateValue {
             PredicateValue::Hex(value) => vec![Token::String(value.to_string())],
             PredicateValue::Base64(value) => value.tokenize(),
             PredicateValue::Expression(value) => value.tokenize(),
+            PredicateValue::Regex(value) => value.tokenize(),
         }
     }
 }
@@ -729,6 +733,13 @@ impl Tokenizable for Expr {
         add_tokens(&mut tokens, self.space1.tokenize());
         tokens.push(Token::CodeDelimiter(String::from("}}")));
         tokens
+    }
+}
+
+impl Tokenizable for Regex {
+    fn tokenize(&self) -> Vec<Token> {
+        let s = str::replace(self.inner.as_str(), "/", "\\/");
+        vec![Token::String(format!("/{}/", s))]
     }
 }
 

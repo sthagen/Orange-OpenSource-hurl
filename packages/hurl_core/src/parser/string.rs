@@ -1,6 +1,6 @@
 /*
- * hurl (https://hurl.dev)
- * Copyright (C) 2020 Orange
+ * Hurl (https://hurl.dev)
+ * Copyright (C) 2022 Orange
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,13 @@ pub fn unquoted_string_key(reader: &mut Reader) -> ParseResult<'static, EncodedS
                     match reader.read() {
                         None => break,
                         Some(c) => {
-                            if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' {
+                            if c.is_alphanumeric()
+                                || c == '_'
+                                || c == '-'
+                                || c == '.'
+                                || c == '['
+                                || c == ']'
+                            {
                                 value.push(c);
                                 encoded.push_str(reader.from(save.cursor).as_str())
                             } else {
@@ -113,8 +119,8 @@ pub fn unquoted_string_key(reader: &mut Reader) -> ParseResult<'static, EncodedS
         }
     }
 
-    // check nonempty
-    if value.is_empty() {
+    // check nonempty/ starts with [
+    if value.is_empty() || encoded.starts_with('[') {
         return Err(Error {
             pos: start,
             recoverable: true,
@@ -152,23 +158,23 @@ pub fn quoted_template(reader: &mut Reader) -> ParseResult<'static, Template> {
     let mut chars = vec![];
     loop {
         let pos = reader.state.pos.clone();
+        let save = reader.state.clone();
         match any_char(vec!['"'], reader) {
             Err(e) => {
                 if e.recoverable {
+                    reader.state = save;
                     break;
                 } else {
                     return Err(e);
                 }
             }
             Ok((c, s)) => {
-                if s == "\"" {
-                    break;
-                }
                 chars.push((c, s, pos));
                 end = reader.state.clone().pos;
             }
         }
     }
+    literal("\"", reader)?;
     let encoded_string = template::EncodedString {
         source_info: SourceInfo {
             start: start.clone(),
@@ -447,6 +453,56 @@ mod tests {
     }
 
     #[test]
+    fn test_unquoted_key_with_square_bracket() {
+        let mut reader = Reader::init("values\\u{5b}0\\u{5d} :");
+        assert_eq!(
+            unquoted_string_key(&mut reader).unwrap(),
+            EncodedString {
+                value: "values[0]".to_string(),
+                encoded: "values\\u{5b}0\\u{5d}".to_string(),
+                quotes: false,
+                source_info: SourceInfo::init(1, 1, 1, 20),
+            }
+        );
+        assert_eq!(reader.state.cursor, 19);
+
+        let mut reader = Reader::init("values[0] :");
+        assert_eq!(
+            unquoted_string_key(&mut reader).unwrap(),
+            EncodedString {
+                value: "values[0]".to_string(),
+                encoded: "values[0]".to_string(),
+                quotes: false,
+                source_info: SourceInfo::init(1, 1, 1, 10),
+            }
+        );
+        assert_eq!(reader.state.cursor, 9);
+    }
+
+    #[test]
+    fn test_unquoted_keys_ignore_start_square_bracket() {
+        let mut reader = Reader::init("[0]:");
+        let error = unquoted_string_key(&mut reader).err().unwrap();
+        assert!(error.recoverable);
+        assert_eq!(reader.state.cursor, 3);
+    }
+
+    #[test]
+    fn test_unquoted_keys_accept_start_escape_square_bracket() {
+        let mut reader = Reader::init("\\u{5b}0\\u{5d}");
+        assert_eq!(
+            unquoted_string_key(&mut reader).unwrap(),
+            EncodedString {
+                value: "[0]".to_string(),
+                encoded: "\\u{5b}0\\u{5d}".to_string(),
+                quotes: false,
+                source_info: SourceInfo::init(1, 1, 1, 14),
+            }
+        );
+        assert_eq!(reader.state.cursor, 13);
+    }
+
+    #[test]
     fn test_unquoted_key_error() {
         let mut reader = Reader::init("");
         let error = unquoted_string_key(&mut reader).err().unwrap();
@@ -522,6 +578,20 @@ mod tests {
             }
         );
         assert_eq!(reader.state.cursor, 8);
+    }
+
+    #[test]
+    fn test_quoted_template_error_missing_closing_quote() {
+        let mut reader = Reader::init("\"not found");
+        let error = quoted_template(&mut reader).err().unwrap();
+        assert_eq!(
+            error.pos,
+            Pos {
+                line: 1,
+                column: 11
+            }
+        );
+        assert!(!error.recoverable);
     }
 
     #[test]
