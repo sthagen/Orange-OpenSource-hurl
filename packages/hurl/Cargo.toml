@@ -23,7 +23,7 @@ brotli = "3.3.3"
 chrono = "0.4.19"
 clap = { version = "3.0.4", features = ["cargo"] }
 colored = "2.0.0"
-curl = "0.4.42"
+curl = "0.4.43"
 encoding = "0.2.33"
 float-cmp = "0.9.0"
 glob = "0.3.0"
@@ -31,14 +31,14 @@ hex = "0.4.3"
 hex-literal = "0.3.4"
 hurl_core = { version = "1.7.0-snapshot", path = "../hurl_core" }
 indexmap = "1.8.0"
-libflate = "1.1.2"
+libflate = "1.2.0"
 libxml = "0.3.0"
 md5 = "0.7.0"
 percent-encoding = "2.1.0"
-regex = "1.5.4"
+regex = "1.5.5"
 serde = "1.0.136"
-serde_json = "1.0.78"
-sha2 = "0.10.1"
+serde_json = "1.0.79"
+sha2 = "0.10.2"
 url = "2.2.2"
 xmltree = { version = "0.10",  features = ["attribute-order"] }
 
@@ -50,5 +50,5 @@ termion = "1.5.6"
 winres = "0.1.12"
 
 [build-dependencies]
-cc = "1.0.72"
+cc = "1.0.73"
 
