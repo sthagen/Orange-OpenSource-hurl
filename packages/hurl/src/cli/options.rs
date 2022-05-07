@@ -16,17 +16,19 @@
  *
  */
 
-use crate::cli;
-use crate::cli::CliError;
-use crate::http::ClientOptions;
-use crate::runner::Value;
-use atty::Stream;
-use clap::{App, AppSettings, ArgMatches};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+use atty::Stream;
+use clap::{AppSettings, ArgMatches, Command};
+
+use crate::cli;
+use crate::cli::CliError;
+use crate::http::ClientOptions;
+use crate::runner::Value;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CliOptions {
@@ -68,11 +70,11 @@ pub enum OutputType {
     NoOutput,
 }
 
-pub fn app(version: &str) -> App {
-    clap::App::new("hurl")
+pub fn app(version: &str) -> Command {
+    Command::new("hurl")
         .about("Run hurl FILE(s) or standard input")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::DisableColoredHelp)
+        .disable_colored_help(true)
         .version(version)
         .arg(
             clap::Arg::new("INPUT")
@@ -332,7 +334,7 @@ pub fn parse_options(matches: ArgMatches) -> Result<CliOptions, CliError> {
     let fail_fast = !matches.is_present("fail_at_end");
     let file_root = matches.value_of("file_root").map(|value| value.to_string());
     let follow_location = matches.is_present("follow_location");
-    let glob_files = match_glob_files(matches.clone())?;
+    let glob_files = match_glob_files(&matches)?;
     let report_html = matches.value_of("report_html");
     let html_dir = if let Some(dir) = report_html {
         let path = Path::new(dir);
@@ -511,12 +513,17 @@ fn variables(matches: ArgMatches) -> Result<HashMap<String, Value>, CliError> {
     Ok(variables)
 }
 
-pub fn match_glob_files(matches: ArgMatches) -> Result<Vec<String>, CliError> {
+///
+/// Returns a list of path names that match `matches`.
+///
+/// # Arguments
+/// * `matches` - A pattern to be matched
+///
+fn match_glob_files(matches: &ArgMatches) -> Result<Vec<String>, CliError> {
     let mut filenames = vec![];
     if matches.is_present("glob") {
         let exprs: Vec<&str> = matches.values_of("glob").unwrap().collect();
         for expr in exprs {
-            eprintln!("expr={}", expr);
             let paths = match glob::glob(expr) {
                 Ok(paths) => paths,
                 Err(_) => {

@@ -21,7 +21,7 @@ atty = "0.2.14"
 base64 = "0.13.0"
 brotli = "3.3.4"
 chrono = "0.4.19"
-clap = { version = "3.0.4", features = ["cargo"] }
+clap = { version = "3.1.16", features = ["cargo"] }
 colored = "2.0.0"
 curl = "0.4.43"
 encoding = "0.2.33"
@@ -36,11 +36,11 @@ libxml = "0.3.1"
 md5 = "0.7.0"
 percent-encoding = "2.1.0"
 regex = "1.5.5"
-serde = "1.0.136"
-serde_json = "1.0.79"
+serde = "1.0.137"
+serde_json = "1.0.81"
 sha2 = "0.10.2"
 url = "2.2.2"
-xmltree = { version = "0.10",  features = ["attribute-order"] }
+xmltree = { version = "0.10.3",  features = ["attribute-order"] }
 
 
 [target.'cfg(unix)'.dependencies]
