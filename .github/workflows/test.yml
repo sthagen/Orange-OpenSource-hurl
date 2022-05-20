@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2    
+      uses: actions/checkout@v3    
     - name: Run dependency_age
       run: |
         ./ci/dependency_age.sh
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Check Shell Scripts
         run: |
           find -name *.sh | xargs shellcheck
@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install
         run: |
           # Install libcurl dev so that hurl can be built dynamically with libcurl
@@ -88,7 +88,7 @@ jobs:
           cd bench
           ./run.sh
       - name: Archive artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: ${{ always() }}
         with:
           name: tests-bench-artifacts
@@ -102,7 +102,7 @@ jobs:
         rust: [stable]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Install
       run: |
         sudo apt update
@@ -133,7 +133,7 @@ jobs:
          xmllint --noout tests_failed/*.html
          ./report.sh
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: tests-ubuntu-${{ matrix.rust }}-artifacts
@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2    
+      uses: actions/checkout@v3    
     - name: Build, Test units and Integration tests
       uses: addnab/docker-run-action@v3
       with:
@@ -165,7 +165,7 @@ jobs:
           ci/install_rust_latest.sh
           ci/build_and_test.sh
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: tests-archlinux-x64-artifacts
@@ -178,7 +178,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2    
+      uses: actions/checkout@v3    
     - name: Build, Test units and Integration tests
       uses: addnab/docker-run-action@v3
       with:
@@ -194,7 +194,7 @@ jobs:
           ci/install_rust_latest.sh
           ci/build_and_test.sh
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: tests-fedora-x64-artifacts
@@ -207,7 +207,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2    
+      uses: actions/checkout@v3    
     - name: Build, Test units and Integration tests
       uses: addnab/docker-run-action@v3
       with:
@@ -224,7 +224,7 @@ jobs:
           ci/install_rust_latest.sh
           ci/build_and_test.sh
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: tests-alpine-x64-artifacts
@@ -240,7 +240,7 @@ jobs:
         rust: [stable]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -272,7 +272,7 @@ jobs:
          cd integration
          ./integration.py
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: tests-macos-${{ matrix.rust }}-artifacts
@@ -283,7 +283,7 @@ jobs:
   test-emulated-raspios-arm-x64:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/cache@v3
       with:
         path: |
@@ -339,7 +339,12 @@ jobs:
         git config --global core.autocrlf false
         git config --global core.eol lf       
     - name: Checkout repository
-      uses: actions/checkout@v2 
+      uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          C:\vcpkg\installed
+        key: ${{ runner.os }}-test-windows-x64
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -356,8 +361,7 @@ jobs:
       run: |
         # vcpkg build prequisites
         (Get-Command vcpkg).Path
-        Expand-Archive -PassThru -Force -LiteralPath .\ci\windows\vcpkg_installed.zip -DestinationPath C:\vcpkg\
-        Get-ChildItem C:\vcpkg\installed
+        if (Test-Path C:\vcpkg\installed) {vcpkg update} else {vcpkg install libxml2:x64-windows}
         vcpkg integrate install
         # install proxy and server
         pip3 install --requirement integration/requirements-frozen.txt
@@ -389,7 +393,7 @@ jobs:
         hurlfmt --no-format tests\assert_base64.hurl
         python integration.py
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: tests-win64-${{ matrix.rust }}-artifacts
