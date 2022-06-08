@@ -6,14 +6,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  dependency-age:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3    
-    - name: Run dependency_age
-      run: |
-        ./ci/dependency_age.sh
   benchsuite:
     runs-on: ubuntu-latest
     steps:
@@ -352,3 +344,4 @@ jobs:
         path: |
           integration/server.log
           integration/server-ssl.log
+
