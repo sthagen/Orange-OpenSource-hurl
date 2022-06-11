@@ -15,10 +15,8 @@
  * limitations under the License.
  *
  */
-
 use crate::http::Response;
-
-use super::cookie::ResponseCookie;
+use crate::http::ResponseCookie;
 
 impl Response {
     pub fn cookies(&self) -> Vec<ResponseCookie> {
@@ -29,9 +27,7 @@ impl Response {
             .collect()
     }
 
-    ///
-    /// Return option cookie from response
-    ///
+    /// Returns optional cookies from response.
     pub fn get_cookie(&self, name: String) -> Option<ResponseCookie> {
         for cookie in self.cookies() {
             if cookie.name == name {

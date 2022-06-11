@@ -20,8 +20,6 @@
 /// This module defines a HTTP ResponseCookie,
 /// namely the cookie returned from the response Set-Cookie header
 ///
-/// They are exclusively used by the cookie query
-/// and not by the http client.
 ///
 
 ///
@@ -41,11 +39,10 @@ pub struct CookieAttribute {
     pub value: Option<String>,
 }
 
-#[allow(dead_code)]
 impl ResponseCookie {
+    /// Parses value from Set-Cookie header into a `ResponseCookie`.
     ///
-    /// parse value from Set-Cookie Header into a Cookie
-    ///
+    /// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
     pub fn parse(s: String) -> Option<ResponseCookie> {
         if let Some(index) = s.find('=') {
             let (name, remaining) = s.split_at(index);
@@ -66,9 +63,7 @@ impl ResponseCookie {
         }
     }
 
-    ///
-    /// return the optional Expires attribute as String type
-    ///
+    /// Returns the optional Expires attribute as `String` type.
     pub fn expires(&self) -> Option<String> {
         for attr in self.attributes.clone() {
             if attr.name.as_str() == "Expires" {
@@ -78,11 +73,9 @@ impl ResponseCookie {
         None
     }
 
+    /// Returns the optional Max-Age attribute as `i64` type.
     ///
-    /// return the optional max_age attribute as i64 type
-    ///
-    /// if the value is not a valid integer, the attribute is simply ignored
-    ///
+    /// If the value is not a valid integer, the attribute is simply ignored
     pub fn max_age(&self) -> Option<i64> {
         for attr in self.attributes.clone() {
             if attr.name.as_str() == "Max-Age" {
@@ -96,9 +89,7 @@ impl ResponseCookie {
         None
     }
 
-    ///
-    /// return the optional Domain attribute as String type
-    ///
+    /// Returns the optional Domain attribute as `String` type.
     pub fn domain(&self) -> Option<String> {
         for attr in self.attributes.clone() {
             if attr.name.as_str() == "Domain" {
@@ -108,9 +99,7 @@ impl ResponseCookie {
         None
     }
 
-    ///
-    /// return the optional Path attribute as String type
-    ///
+    /// Returns the optional Path attribute as `String` type.
     pub fn path(&self) -> Option<String> {
         for attr in self.attributes.clone() {
             if attr.name.as_str() == "Path" {
@@ -120,9 +109,7 @@ impl ResponseCookie {
         None
     }
 
-    ///
-    /// return true if the Secure attribute is present
-    ///
+    /// Return true if the Secure attribute is present.
     pub fn has_secure(&self) -> bool {
         for attr in self.attributes.clone() {
             if attr.name.as_str() == "Secure" && attr.value.is_none() {
@@ -132,9 +119,7 @@ impl ResponseCookie {
         false
     }
 
-    ///
-    /// return true if the HttpOnly attribute is present
-    ///
+    /// Return true if the HttpOnly attribute is present.
     pub fn has_httponly(&self) -> bool {
         for attr in self.attributes.clone() {
             if attr.name.as_str() == "HttpOnly" && attr.value.is_none() {
@@ -144,9 +129,7 @@ impl ResponseCookie {
         false
     }
 
-    ///
-    /// return the optional SameSite attribute as String type
-    ///
+    /// Returns the optional SameSite attribute as `String` type.
     pub fn samesite(&self) -> Option<String> {
         for attr in self.attributes.clone() {
             if attr.name.as_str() == "SameSite" {
