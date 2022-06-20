@@ -28,7 +28,7 @@ use super::options::ClientOptions;
 use super::request::*;
 use super::request_spec::*;
 use super::response::*;
-use crate::http::HttpError;
+use crate::http::{HttpError, Verbosity};
 use std::str::FromStr;
 use url::Url;
 
@@ -70,8 +70,11 @@ impl Client {
         }
     }
 
+    /// Execute an HTTP request and returns a list
     ///
-    /// Execute an http request
+    /// # Arguments
+    ///
+    /// * request - A request specification
     ///
     pub fn execute_with_redirect(
         &mut self,
@@ -153,7 +156,7 @@ impl Client {
 
         self.set_headers(request);
 
-        let verbose = self.options.verbose;
+        let verbose = self.options.verbosity != None;
         let mut request_headers: Vec<Header> = vec![];
 
         let start = Instant::now();
@@ -251,6 +254,11 @@ impl Client {
             body,
             duration,
         };
+
+        if self.options.verbosity == Some(Verbosity::VeryVerbose) {
+            response.log_body();
+        }
+
         Ok((request, response))
     }
 
@@ -493,7 +501,7 @@ impl Client {
     /// Add cookie to Cookiejar
     ///
     pub fn add_cookie(&mut self, cookie: Cookie) {
-        if self.options.verbose {
+        if self.options.verbosity != None {
             eprintln!("* add to cookie store: {}", cookie);
         }
         self.handle
@@ -505,7 +513,7 @@ impl Client {
     /// Clear cookie storage
     ///
     pub fn clear_cookie_storage(&mut self) {
-        if self.options.verbose {
+        if self.options.verbosity != None {
             eprintln!("* clear cookie storage");
         }
         self.handle.cookie_list("ALL").unwrap();
@@ -629,6 +637,47 @@ pub fn decode_header(data: &[u8]) -> Option<String> {
                 None
             }
         },
+    }
+}
+
+impl Response {
+    ///
+    /// Log a response body as text if possible, or a slice of body bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The HTTP response
+    fn log_body(&self) {
+        eprintln!("* Response:");
+
+        // We try to decode the HTTP body as text if the response has a text kind content type.
+        // If it ok, we print each line of the body in debug format. Otherwise, we
+        // print the body first 64 bytes.
+        if let Some(content_type) = self.content_type() {
+            if !content_type.contains("text") {
+                self.log_bytes(64);
+                return;
+            }
+        }
+        match self.text() {
+            Ok(text) => text.split('\n').for_each(|l| eprintln!("* {}", l)),
+            Err(_) => self.log_bytes(64),
+        }
+    }
+
+    ///
+    /// Log a response bytes with a maximum size.
+    ///
+    /// # Arguments
+    ///
+    /// * `max` - The maximum number if bytes to log
+    fn log_bytes(&self, max: usize) {
+        let bytes = if self.body.len() > max {
+            &self.body[..max]
+        } else {
+            &self.body
+        };
+        eprintln!("* Bytes <{}...>", hex::encode(bytes))
     }
 }
 

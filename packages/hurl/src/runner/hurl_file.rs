@@ -35,7 +35,7 @@ use super::entry;
 /// use hurl::runner;
 ///
 /// // Parse Hurl file
-/// let filename = "sample.hurl".to_string();
+/// let filename = "sample.hurl";
 /// let s = r#"
 /// GET http://localhost:8000/hello
 /// HTTP/1.0 200
@@ -59,6 +59,7 @@ use super::entry;
 ///        to_entry: None,
 ///        context_dir: PathBuf::new(),
 ///        ignore_asserts: false,
+///        very_verbose: false,
 ///        pre_entry: |_| true,
 ///        post_entry: || true,
 ///  };
@@ -80,7 +81,7 @@ use super::entry;
 pub fn run(
     hurl_file: HurlFile,
     http_client: &mut http::Client,
-    filename: String,
+    filename: &str,
     options: &RunnerOptions,
     log_verbose: &impl Fn(&str),
     log_error_message: &impl Fn(bool, &str),
@@ -143,6 +144,7 @@ pub fn run(
         .is_none();
 
     let cookies = http_client.get_cookie_storage();
+    let filename = filename.to_string();
     HurlResult {
         filename,
         entries,

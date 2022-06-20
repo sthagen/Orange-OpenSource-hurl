@@ -27,6 +27,7 @@ use colored::*;
 use hurl::cli;
 use hurl::cli::{CliError, CliOptions, OutputType};
 use hurl::http;
+use hurl::http::Verbosity;
 use hurl::report;
 use hurl::report::canonicalize_filename;
 use hurl::runner;
@@ -86,7 +87,7 @@ fn execute(
     filename: &str,
     contents: String,
     current_dir: &Path,
-    cli_options: CliOptions,
+    cli_options: &CliOptions,
     log_verbose: &impl Fn(&str),
     log_error_message: &impl Fn(bool, &str),
     progress: Option<Progress>,
@@ -123,7 +124,7 @@ fn execute(
             if let Some(n) = cli_options.max_redirect {
                 log_verbose(format!("    max redirect: {}", n).as_str());
             }
-            if let Some(proxy) = cli_options.proxy.clone() {
+            if let Some(proxy) = &cli_options.proxy {
                 log_verbose(format!("    proxy: {}", proxy).as_str());
             }
 
@@ -145,19 +146,23 @@ fn execute(
                 }
             }
 
-            let cacert_file = cli_options.cacert_file;
+            let cacert_file = cli_options.cacert_file.clone();
             let follow_location = cli_options.follow_location;
-            let verbose = cli_options.verbose;
+            let verbosity = match (cli_options.verbose, cli_options.very_verbose) {
+                (true, true) => Some(Verbosity::VeryVerbose),
+                (true, _) => Some(Verbosity::Verbose),
+                _ => None,
+            };
             let insecure = cli_options.insecure;
             let max_redirect = cli_options.max_redirect;
-            let proxy = cli_options.proxy;
-            let no_proxy = cli_options.no_proxy;
-            let cookie_input_file = cli_options.cookie_input_file;
+            let proxy = cli_options.proxy.clone();
+            let no_proxy = cli_options.no_proxy.clone();
+            let cookie_input_file = cli_options.cookie_input_file.clone();
 
             let timeout = cli_options.timeout;
             let connect_timeout = cli_options.connect_timeout;
-            let user = cli_options.user;
-            let user_agent = cli_options.user_agent;
+            let user = cli_options.user.clone();
+            let user_agent = cli_options.user_agent.clone();
             let compressed = cli_options.compressed;
             let context_dir = match cli_options.file_root {
                 None => {
@@ -177,7 +182,7 @@ fn execute(
                 cookie_input_file,
                 proxy,
                 no_proxy,
-                verbose,
+                verbosity,
                 insecure,
                 timeout,
                 connect_timeout,
@@ -199,19 +204,26 @@ fn execute(
             } else {
                 || false
             };
+            let fail_fast = cli_options.fail_fast;
+            let variables = cli_options.variables.clone();
+            let to_entry = cli_options.to_entry;
+            let context_dir = context_dir.to_path_buf();
+            let ignore_asserts = cli_options.ignore_asserts;
+            let very_verbose = cli_options.very_verbose;
             let options = RunnerOptions {
-                fail_fast: cli_options.fail_fast,
-                variables: cli_options.variables,
-                to_entry: cli_options.to_entry,
-                context_dir: context_dir.to_path_buf(),
-                ignore_asserts: cli_options.ignore_asserts,
+                fail_fast,
+                variables,
+                to_entry,
+                context_dir,
+                ignore_asserts,
+                very_verbose,
                 pre_entry,
                 post_entry,
             };
             let result = runner::run_hurl_file(
                 hurl_file,
                 &mut client,
-                filename.to_string(),
+                filename,
                 &options,
                 &log_verbose,
                 &log_error_message,
@@ -257,11 +269,13 @@ fn main() {
     let matches = app.clone().get_matches();
     init_colored();
 
-    let verbose = cli::has_flag(&matches, "verbose") || cli::has_flag(&matches, "interactive");
+    let verbose = cli::has_flag(&matches, "verbose")
+        || cli::has_flag(&matches, "very_verbose")
+        || cli::has_flag(&matches, "interactive");
     let log_verbose = cli::make_logger_verbose(verbose);
-    let color = cli::output_color(matches.clone());
+    let color = cli::output_color(&matches);
     let log_error_message = cli::make_logger_error_message(color);
-    let cli_options = unwrap_or_exit(cli::parse_options(matches.clone()), &log_error_message);
+    let cli_options = unwrap_or_exit(cli::parse_options(&matches), &log_error_message);
 
     let mut filenames = vec![];
     if let Some(values) = cli::get_strings(&matches, "INPUT") {
@@ -323,7 +337,7 @@ fn main() {
             filename,
             contents.clone(),
             current_dir,
-            cli_options.clone(),
+            &cli_options,
             &log_verbose,
             &log_error_message,
             progress,
@@ -334,11 +348,13 @@ fn main() {
             && hurl_result.errors().is_empty()
             && !cli_options.interactive
         {
-            // default
-            // last entry + response + body
+            // By default, we output the body response bytes of the last entry
             if let Some(entry_result) = hurl_result.entries.last() {
                 if let Some(response) = entry_result.response.clone() {
                     let mut output = vec![];
+
+                    // If include options is set, we output the HTTP response headers
+                    // with status and version (to mimic curl outputs)
                     if cli_options.include {
                         let status_line =
                             format!("HTTP/{} {}\n", response.version, response.status);
