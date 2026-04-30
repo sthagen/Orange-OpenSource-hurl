@@ -1,17 +1,13 @@
-FROM alpine:3.22 AS builder
+FROM alpine:3.23 AS builder
 ARG TARGETPLATFORM
 WORKDIR /tmp/hurl-docker
 COPY . /tmp/hurl-docker
 RUN apk add --no-cache bash git && \
-    if [ "${TARGETPLATFORM}" = "linux/arm64" ] ; then \
-        apk add --no-cache -y g++-aarch64-linux-gnu libc6-dev-arm64-cross ; \
-        ./bin/export_cross_compile_env.sh ; \
-    fi ; \
     bash -c "bin/install_prerequisites_alpine.sh" && \
     bash -c "bin/install_rust.sh" && \
     bash -c "./bin/release/release.sh"
 
-FROM alpine:3.22 AS runner
+FROM alpine:3.23 AS runner
 ARG docker_build_date
 ARG docker_build_tag
 LABEL "org.opencontainers.image.source"="https://github.com/Orange-OpenSource/hurl"
@@ -41,5 +37,5 @@ COPY --from=builder /usr/lib/libxml2.so.* /usr/lib/
 COPY --from=builder /usr/lib/libgcc_s.so.* /usr/lib/
 COPY --from=builder /usr/lib/liblzma.so.* /usr/lib/
 COPY --from=builder /usr/lib/libidn2.so.* /usr/lib/
+COPY --from=builder /usr/lib/libnghttp3.so.* /usr/lib/
 ENTRYPOINT ["/usr/bin/hurl"]
-

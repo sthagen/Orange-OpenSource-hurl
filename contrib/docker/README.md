@@ -1,13 +1,5 @@
 # Build multiplatform amd64 and arm64 with buildx
 
-## Clone desired tag
-
-```
-tag=<desired tag, ex: 4.0.0>
-organisation=<desired organisation in lowercase, ex: orange-opensource>
-git clone --depth 1 https://github.com/"${organisation}"/hurl.git --branch "${tag}" /tmp/hurl-"${tag}"
-```
-
 ## Prepare docker build env
 
 ```
@@ -30,18 +22,27 @@ docker buildx ls
 ## Connect to github container registry
 
 ```
-echo <hurl-bot github token> | docker login ghcr.io --username hurl-bot --password-stdin
+read -s -p "Hurl-bot github token: " hurl_bot_token
+echo "${hurl_bot_token}" | docker login ghcr.io --username hurl-bot --password-stdin
+```
+
+## Clone desired tag
+
+```
+read -e -i "" -p "Hurl version: " tag
+read -e -i "orange-opensource" -p "organisation: " organisation
+git clone --depth 1 https://github.com/"${organisation}"/hurl.git --branch "${tag}" /tmp/hurl-"${tag}"
+cd /tmp/hurl-"${tag}"
 ```
 
 ## Build and push
 
 ```
-cd /tmp/hurl-"${tag}"
 docker_build_tag=$(grep ^version packages/hurl/Cargo.toml | cut --delimiter '=' --field 2 | tr -d '" ')
 echo "docker_build_tag=${docker_build_tag}"
 docker_build_date=$(date "+%Y-%m-%d %H-%M-%S")
 echo "docker_build_date=${docker_build_date}"
-docker buildx build --platform linux/amd64,linux/arm64 --file contrib/docker/Dockerfile --build-arg docker_build_date="${docker_build_date}" --build-arg docker_build_tag="${docker_build_tag}" --tag ghcr.io/"${organisation}"/hurl:"${docker_build_tag}" --tag ghcr.io/"${organisation}"/hurl:latest --push .
+docker buildx build --platform linux/amd64,linux/arm64 --file contrib/docker/Dockerfile --build-arg docker_build_date="${docker_build_date}" --build-arg docker_build_tag="${docker_build_tag}" --tag ghcr.io/"${organisation}"/hurl:"${docker_build_tag}" --push .
 ```
 
 ## Get docker hurl version
@@ -63,13 +64,24 @@ echo -e "GET https://hurl.dev\n\nHTTP 200" > /tmp/test.hurl
 docker run --rm -v /tmp/test.hurl:/tmp/test.hurl ghcr.io/"${organisation}"/hurl:"${docker_build_tag}" --test --color --very-verbose /tmp/test.hurl
 ```
 
+## Tag latest
+
+Get manifest list sha256 from github packages page (ex: sha256:d7727dcc0166de8aea88916e73ea435ee09bfecb8ba0c281200206b6cf37cf64) and :
+
+```
+read -e -i "" -p "Hurl ${docker_build_tag} manifest sha256: " sha
+docker buildx imagetools create   -t ghcr.io/"${organisation}"/hurl:latest   ghcr.io/orange-opensource/hurl@"${sha}"
+```
+
+## Build and push
+
 # Build amd64 image only
 
 ## Clone desired tag
 
 ```
-tag=<desired tag, ex: 4.0.0>
-organisation=<desired organisation in lowercase, ex: orange-opensource>
+read -e -i "" -p "Hurl version: " tag
+read -e -i "orange-opensource" -p "organisation: " organisation
 git clone --depth 1 https://github.com/"${organisation}"/hurl.git --branch "${tag}" /tmp/hurl-"${tag}"
 ```
 
@@ -128,8 +140,8 @@ docker push ghcr.io/"${organisation}"/hurl:amd64-"${docker_build_tag}"
 ## Clone desired tag
 
 ```
-tag=<desired tag, ex: 4.0.0>
-organisation=<desired organisation in lowercase, ex: orange-opensource>
+read -e -i "" -p "Hurl version: " tag
+read -e -i "orange-opensource" -p "organisation: " organisation
 git clone --depth 1 https://github.com/"${organisation}"/hurl.git --branch "${tag}" /tmp/hurl-"${tag}"
 ```
 
