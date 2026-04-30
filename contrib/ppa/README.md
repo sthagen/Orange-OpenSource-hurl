@@ -33,10 +33,9 @@ gpg --import /tmp/myprivatekey.asc
 ## Choose Hurl version and Ubuntu codename
 
 ```
-echo -n "hurl_version=" && read -r hurl_version
-echo -n "Ubuntu codename=" && read -r codename
-echo -n "Gpg passphrase=" && read -r passphrase
-
+read -e -i "" -p "Hurl version: " hurl_version
+read -e -i "" -p "Ubuntu codename: " codename
+read -s -p "Gpg passphrase: " passphrase
 ```
 
 ## Export gpg key
@@ -108,10 +107,10 @@ rm -fr .github \
        CONTRIBUTING.md
 while read -r dir ; do
     rm -fr $dir
-done < <(find bin -mindepth 1 -type d | grep -v "bin/release")
+done < <(find bin -mindepth 1 -type d | grep -Ev "bin/release|bin/docs")
 while read -r file ; do
     rm -fr $file
-done < <(find bin -type f | grep -Ev "man\.sh|release\.sh|gen_manpage\.py")
+done < <(find bin -type f | grep -Ev "man\.sh|release\.sh|build_man\.py")
 while read -r dir ; do
     rm -fr $dir
 done < <(find docs -mindepth 1 -type d | grep -v "docs/manual")
@@ -306,3 +305,4 @@ else
     export PATH=/opt/libxml2-"${minimum_version}"/bin:$PATH
 fi
 ```
+
